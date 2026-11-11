@@ -237,7 +237,6 @@ elif menu == "필드 클레임 현황":
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
             try:
                 raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, sheet_name=0)
-                # BL열(현상명), BH열(현상상세) 컬럼명 매핑 보장
                 if len(raw_df.columns) > 63:
                     raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
                 if len(raw_df.columns) > 59:
@@ -270,14 +269,10 @@ elif menu == "필드 클레임 현황":
 
         def get_multiselect_filter(label, col_name, custom_options=None):
             if col_name in df.columns:
-                if custom_options is not None:
-                    options = custom_options
-                else:
-                    options = sorted([str(x) for x in df[col_name].dropna().unique()])
+                options = custom_options if custom_options is not None else sorted([str(x) for x in df[col_name].dropna().unique()])
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
-        # 요청하신 항목별 배치 (현상명은 '누수', '소음', '기타'만 검색/선택 가능하게 설정)
         phenomenon_options = ["누수", "소음", "기타"]
 
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
@@ -309,7 +304,6 @@ elif menu == "필드 클레임 현황":
         if selected_part_names: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
         if selected_cars: filtered_df = filtered_df[filtered_df['차종'].astype(str).isin(selected_cars)]
         
-        # 현상명(BL열) 필터링: 사용자가 선택한 '누수', '소음', '기타' 키워드가 포함된 데이터 매칭
         if selected_phen_names and '현상명' in filtered_df.columns:
             phen_mask = pd.Series(False, index=filtered_df.index)
             for p in selected_phen_names:
@@ -352,7 +346,7 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 1. 상단 추이 분석 그래프 (생산월: 파란색 막대 [좌측 축] & 수리월: 빨간색 꺾은선 [우측 축])
+        # 1. 상단 추이 분석 그래프
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 [좌측 축] & 수리월 빨간색 꺾은선 [우측 축])")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
@@ -385,7 +379,7 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석 (수평 막대 그래프: 누수/소음/기타 집계 및 사용개월 높이 최적화)
+        # 2. 하단 다각도 분석 (수평 막대 그래프)
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
         def plot_horizontal_bar(data_series, title_text, top_n=15, height=450):
@@ -421,7 +415,6 @@ elif menu == "필드 클레임 현황":
         with hb_col1:
             st.markdown("##### 📊 현상명별 클레임 현황 (누수 / 소음 / 기타)")
             if '현상명' in filtered_df.columns:
-                # 누수, 소음, 기타 카테고리별 집계 생성
                 leak_count = filtered_df['현상명'].astype(str).str.contains("누수", case=False, na=False).sum()
                 noise_count = filtered_df['현상명'].astype(str).str.contains("소음|이음", case=False, na=False).sum()
                 other_count = len(filtered_df) - (leak_count + noise_count)
@@ -440,9 +433,17 @@ elif menu == "필드 클레임 현황":
         with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns:
-                # 사용개월별 데이터 높이 축소 및 가독성 최적화
-                usage_series = filtered_df.groupby('사용개월').size()
-                plot_horizontal_bar(usage_series, "", top_n=20, height=380)
+                # 요청하신 9개 기준으로 데이터 그룹화 및 정렬
+                bins = [-1, 3, 6, 9, 12, 24, 36, 48, 60, 999999]
+                labels = ['3개월 (0~3)', '6개월 (4~6)', '9개월 (7~9)', '12개월 (10~12)', '24개월 (13~24)', '36개월 (25~36)', '48개월 (37~48)', '60개월 (49~60)', '60개월 이상']
+                
+                temp_df = filtered_df.copy()
+                temp_df['사용개월_구간'] = pd.cut(temp_df['사용개월'], bins=bins, labels=labels)
+                usage_grouped = temp_df.groupby('사용개월_구간', observed=False).size()
+                
+                # 지정된 9개 순서대로 인덱스 정렬
+                usage_grouped = usage_grouped.reindex(labels).fillna(0)
+                plot_horizontal_bar(usage_grouped, "", top_n=9, height=380)
             else:
                 st.info("데이터 없음")
 
