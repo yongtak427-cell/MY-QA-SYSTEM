@@ -226,7 +226,6 @@ elif menu == "필드 클레임 현황":
     st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
     st.markdown("구글 시트에 등록된 데이터를 불러오거나 엑셀 파일을 업로드하여 클레임 분석을 진행하세요.")
 
-    # 파일 업로드 및 구글 시트 자동 조회 버튼 영역
     col_up1, col_up2 = st.columns([2, 1])
     with col_up1:
         uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
@@ -237,28 +236,31 @@ elif menu == "필드 클레임 현황":
     if uploaded_file is not None:
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
             try:
-                if uploaded_file.name.endswith('.csv'):
-                    st.session_state['claim_df'] = pd.read_csv(uploaded_file)
-                else:
-                    st.session_state['claim_df'] = pd.read_excel(uploaded_file, sheet_name=0)
+                raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, sheet_name=0)
+                # 열 이름 매핑 확보 (BL열: 현상명, BH열: 현상상세)
+                if len(raw_df.columns) > 63:
+                    raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
+                if len(raw_df.columns) > 59:
+                    raw_df.rename(columns={raw_df.columns[59]: '현상상세'}, inplace=True)
+                st.session_state['claim_df'] = raw_df
                 st.session_state['uploaded_file_name'] = uploaded_file.name
             except Exception as e:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     if load_gsheet_btn:
         try:
-            # 공개된 구글 스프레드시트 CSV 내보내기 링크 변환 방식 지원
             sheet_url = st.session_state['gsheet_url']
-            if "edit?usp=sharing" in sheet_url or "/edit" in sheet_url:
-                export_url = sheet_url.split('/edit')[0] + '/export?format=csv'
-            else:
-                export_url = sheet_url
-            
-            st.session_state['claim_df'] = pd.read_csv(export_url)
+            export_url = sheet_url.split('/edit')[0] + '/export?format=csv' if "edit" in sheet_url else sheet_url
+            raw_df = pd.read_csv(export_url)
+            if len(raw_df.columns) > 63:
+                raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
+            if len(raw_df.columns) > 59:
+                raw_df.rename(columns={raw_df.columns[59]: '현상상세'}, inplace=True)
+            st.session_state['claim_df'] = raw_df
             st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
             st.rerun()
         except Exception as e:
-            st.error(f"구글 시트 연동 중 오류 발생: {e}. '구글 시트 연동 설정' 메뉴에서 URL이 올바른지 확인해주세요.")
+            st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
     df = st.session_state['claim_df']
 
@@ -272,13 +274,13 @@ elif menu == "필드 클레임 현황":
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
-        # 요청하신 3줄 배치 구조 반영
+        # 요청하신 3줄 배치 구조 반영 (현상명: BL열 기준 / 현상상세: BH열 기준)
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
         with r1_c1: selected_part_nos = get_multiselect_filter("품번", "품번")
         with r1_c2: selected_part_names = get_multiselect_filter("부품명", "부품명")
         with r1_c3: selected_cars = get_multiselect_filter("차종", "차종")
-        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")
-        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세")
+        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")       # BL열 데이터
+        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세") # BH열 데이터
 
         r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
         with r2_c1: selected_prod_months = get_multiselect_filter("생산월", "생산월")
@@ -369,14 +371,18 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석 (수평 막대 그래프 + 막대 끝 숫자 표기)
+        # 2. 하단 다각도 분석 (수평 막대 그래프: 상위 항목만 추출 및 폰트/여백 최적화로 가독성 확보)
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
-        def plot_horizontal_bar(data_series, title_text):
+        def plot_horizontal_bar(data_series, title_text, top_n=15):
             if data_series.empty:
                 st.info("데이터 없음")
                 return
-            data_series = data_series.sort_values(ascending=True) # 오름차순 정렬해야 가로축 위쪽부터 큰 값이 나옴
+            # 데이터가 너무 많을 경우 상위 top_n개만 추려서 가독성 극대화
+            if len(data_series) > top_n:
+                data_series = data_series.nlargest(top_n)
+            data_series = data_series.sort_values(ascending=True)
+            
             fig = go.Figure(go.Bar(
                 x=data_series.values,
                 y=data_series.index,
@@ -390,15 +396,17 @@ elif menu == "필드 클레임 현황":
                 template="plotly_dark",
                 paper_bgcolor="#0e1117",
                 plot_bgcolor="#0e1117",
-                height=400,
-                margin=dict(l=100, r=40, t=40, b=40)
+                height=450,
+                margin=dict(l=150, r=50, t=30, b=30),
+                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(tickfont=dict(size=11))
             )
             st.plotly_chart(fig, use_container_width=True)
 
         hb_col1, hb_col2 = st.columns(2)
 
         with hb_col1:
-            st.markdown("##### 📊 현상명별 클레임 현황")
+            st.markdown("##### 📊 현상명별 클레임 현황 (상위 항목)")
             if '현상명' in filtered_df.columns:
                 plot_horizontal_bar(filtered_df.groupby('현상명').size(), "")
             else:
@@ -407,20 +415,20 @@ elif menu == "필드 클레임 현황":
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
-                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "")
+                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "", top_n=10)
             else:
                 st.info("데이터 없음")
 
         with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('사용개월').size(), "")
+                plot_horizontal_bar(filtered_df.groupby('사용개월').size(), "", top_n=15)
             else:
                 st.info("데이터 없음")
 
-            st.markdown("##### 📊 차종별 클레임 현황")
+            st.markdown("##### 📊 차종별 클레임 현황 (상위 항목)")
             if '차종' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('차종').size(), "")
+                plot_horizontal_bar(filtered_df.groupby('차종').size(), "", top_n=15)
             else:
                 st.info("데이터 없음")
 
