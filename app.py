@@ -326,7 +326,6 @@ elif menu == "필드 클레임 현황":
         st.markdown("---")
         st.markdown("#### 🔍 클레임 조회")
 
-        # 필터 UI 배치 (4열) - multiselect로 다중 선택 가능하도록 변경
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
 
         with f_col1:
@@ -363,11 +362,9 @@ elif menu == "필드 클레임 현황":
             prod_months = sorted(list(df['생산월'].dropna().unique())) if '생산월' in df.columns else []
             selected_prod_months = st.multiselect("생산월 (다중 선택 가능)", prod_months)
 
-            # 사용개월 구간 선택 (3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120)
             usage_options = [3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120]
             selected_usages = st.multiselect("사용개월 선택 (다중 선택 가능)", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월")
 
-            # 주행거리 구간 선택 (5000, 10000, 30000, 50000, 70000, 100000, 100000이상)
             mile_options = [5000, 10000, 30000, 50000, 70000, 100000, 999999]
             selected_miles = st.multiselect(
                 "주행거리 구간 선택 (다중 선택 가능)", 
@@ -398,7 +395,6 @@ elif menu == "필드 클레임 현황":
         if selected_prod_months:
             filtered_df = filtered_df[filtered_df['생산월'].isin(selected_prod_months)]
 
-        # 사용개월 구간 필터링 (예: 3개월 -> 0~3, 6개월 -> 4~6, 9개월 -> 7~9 등)
         if selected_usages and '사용개월' in filtered_df.columns:
             usage_mask = pd.Series(False, index=filtered_df.index)
             for u in selected_usages:
@@ -411,12 +407,10 @@ elif menu == "필드 클레임 현황":
                 elif u == 12:
                     usage_mask |= (filtered_df['사용개월'] >= 10) & (filtered_df['사용개월'] <= 12)
                 else:
-                    # 그 외 (24, 36 등은 이전 구간 초과 ~ 해당 값)
                     prev_u = u - 12 if u > 12 else 12
                     usage_mask |= (filtered_df['사용개월'] > prev_u) & (filtered_df['사용개월'] <= u)
             filtered_df = filtered_df[usage_mask]
 
-        # 주행거리 구간 필터링 (5000: 0~5000, 10000: 5001~10000, 등)
         if selected_miles and '주행거리Km' in filtered_df.columns:
             mile_mask = pd.Series(False, index=filtered_df.index)
             for m in selected_miles:
@@ -438,11 +432,50 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 3. 상단: 꺾은선 그래프 (수리월 기준 추이 분석)
-        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (꺾은선 그래프)")
-        if not filtered_df.empty and '수리월' in filtered_df.columns:
-            trend_data = filtered_df.groupby('수리월').size().reset_index(name='클레임 건수')
-            st.line_chart(trend_data.set_index('수리월'))
+        # 3. 상단: 클레임 추이 분석 (생산월 파란색 막대 + 수리월 빨간색 꺾은선 통합 차트)
+        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 막대 & 수리월 꺾은선)")
+        if not filtered_df.empty:
+            # 월별 집계 데이터 생성
+            chart_df = pd.DataFrame()
+            if '수리월' in filtered_df.columns:
+                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수(꺾은선)')
+                chart_df = pd.concat([chart_df, repair_trend], axis=1)
+            if '생산월' in filtered_df.columns:
+                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수(막대)')
+                chart_df = pd.concat([chart_df, prod_trend], axis=1)
+            
+            chart_df = chart_df.fillna(0).sort_index()
+
+            if not chart_df.empty:
+                # 꺾은선(수리월-빨강)과 막대(생산월-파랑)를 함께 시각화하기 위해 Matplotlib 활용 또는 Streamlit 차트 활용
+                import matplotlib.pyplot as plt
+
+                fig, ax1 = plt.subplots(figsize=(14, 4))
+                fig.patch.set_facecolor('#0e1117')
+                ax1.set_facecolor('#0e1117')
+
+                # 생산월 막대 그래프 (파란색)
+                if '생산건수(막대)' in chart_df.columns:
+                    ax1.bar(chart_df.index, chart_df['생산건수(막대)'], color='#3b82f6', alpha=0.6, label='생산월 클레임')
+
+                # 수리월 꺾은선 그래프 (빨간색 계열)
+                ax2 = ax1.twinx()
+                if '수리건수(꺾은선)' in chart_df.columns:
+                    ax2.plot(chart_df.index, chart_df['수리건수(꺾은선)'], color='#ef4444', marker='o', linewidth=2, label='수리월 클레임')
+
+                ax1.tick_params(axis='x', rotation=90, colors='white')
+                ax1.tick_params(axis='y', colors='white')
+                ax2.tick_params(axis='y', colors='white')
+                ax1.spines['bottom'].set_color('gray')
+                ax1.spines['left'].set_color('gray')
+                ax2.spines['right'].set_color('gray')
+                ax1.spines['top'].set_visible(False)
+                ax2.spines['top'].set_visible(False)
+                ax1.grid(True, linestyle='--', alpha=0.2)
+
+                st.pyplot(fig)
+            else:
+                st.info("시각화할 데이터가 없습니다.")
         else:
             st.info("표시할 트렌드 데이터가 없습니다.")
 
