@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 import calendar
+import os
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
@@ -103,22 +104,18 @@ if menu == "업무 현황":
 
     st.markdown("---")
 
-    # 법정 공휴일 정의 (월, 일)
     holidays = [(1, 1), (3, 1), (5, 5), (6, 6), (8, 15), (10, 3), (10, 9), (12, 25)]
 
-    # 대형 달력 렌더링
     selected_year = st.session_state['cal_year']
     selected_month = st.session_state['cal_month']
     cal_matrix = calendar.monthcalendar(selected_year, selected_month)
 
-    # 요일 헤더 (월~일)
     days_kor = ["월", "화", "수", "목", "금", "토", "일"]
     h_cols = st.columns(7)
     for i, d_name in enumerate(days_kor):
         color = "red" if i == 6 else "white"
         h_cols[i].markdown(f"<p style='text-align: center; font-weight: bold; color: {color}; font-size: 16px;'>{d_name}</p>", unsafe_allow_html=True)
 
-    # 날짜 그리드 출력
     for week in cal_matrix:
         w_cols = st.columns(7)
         for i, day in enumerate(week):
@@ -141,7 +138,7 @@ if menu == "업무 현황":
                             bg, fg = "#fee2e2", "#991b1b"
                         elif cat == '자료작성':
                             bg, fg = "#dbeafe", "#1e40af"
-                        else: # 업체접수
+                        else:
                             bg, fg = "#fef08a", "#854d0e"
                             
                         if t['completed']:
@@ -302,126 +299,169 @@ if menu == "업무 현황":
 
 elif menu == "필드 클레임 현황":
     st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
-    st.markdown("엑셀 파일을 업로드하여 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
+    st.markdown("첨부된 엑셀 파일 또는 업로드된 데이터를 기반으로 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
 
-    # 1. 엑셀 파일 업로더
+    # 1. 파일 자동 감지 또는 업로드
+    default_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.csv')]
     uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
 
     @st.cache_data
-    def load_default_data():
-        # 기본 샘플 데이터 (사용자가 엑셀을 올리기 전 테스트용)
-        data = {
-            "차종": ["(JA) MORNING", "(AX1) AX1", "(AC3) I10 20", "(JA) MORNING", "(AX1) AX1", "(AC3) I10 20"],
-            "품번": ["25100-07010", "25100-07010", "25100-07010", "25100-07010", "25100-07010", "25100-07010"],
-            "부품명": ["카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi"],
-            "현상코드": ["E01", "E02", "E01", "E03", "E02", "E01"],
-            "현상명": ["엔진 소음", "냉각수 누수", "엔진 소음", "기타", "냉각수 누수", "엔진 소음"],
-            "생산월": ["23.01", "23.02", "23.01", "24.01", "24.02", "25.01"],
-            "판매월": ["23.03", "23.04", "23.03", "24.03", "24.04", "25.03"],
-            "수리월": ["24.01", "24.02", "24.03", "25.01", "25.02", "26.01"],
-            "사용개월": [10, 22, 35, 12, 10, 12],
-            "주행거리": [15000, 45000, 75000, 25000, 15000, 30000],
-            "판매국가": ["국내", "유럽", "인도", "국내", "유럽", "국내"],
-            "VIN": ["KMH123", "KMH456", "KMH789", "KMH111", "KMH222", "KMH333"],
-            "공장": ["화성", "서산", "인도법인", "화성", "서산", "화성"],
-            "건수": [1, 1, 1, 1, 1, 1]
-        }
-        return pd.DataFrame(data)
-
-    if uploaded_file is not None:
+    def load_claim_data(path_or_file):
         try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
+            if isinstance(path_or_file, str):
+                df = pd.read_excel(path_or_file, sheet_name=0)
             else:
-                df = pd.read_excel(uploaded_file)
-            st.success(f"성공적으로 파일이 업로드되었습니다! (총 {len(df)}행)")
+                if path_or_file.name.endswith('.csv'):
+                    df = pd.read_csv(path_or_file)
+                else:
+                    df = pd.read_excel(path_or_file)
+            return df
         except Exception as e:
             st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
-            df = load_default_data()
+            return pd.DataFrame()
+
+    if uploaded_file is not None:
+        df = load_claim_data(uploaded_file)
+    elif default_files:
+        # 현재 폴더에 있는 첨부 엑셀 파일 자동 로드
+        target_file = [f for f in default_files if "RO LIST" in f or "생산" in f]
+        df = load_claim_data(target_file[0] if target_file else default_files[0])
     else:
-        df = load_default_data()
+        df = pd.DataFrame()
 
-    st.markdown("---")
+    if not df.empty:
+        st.markdown("---")
+        st.markdown("#### 🔍 조회 조건 필터 (차종, 품번, 부품명, 현상코드, 현상명, 생산월, 판매월, 수리월, 사용개월, 주행거리, 판매국가, VIN, 공장 등)")
 
-    # 2. 조회 필터 항목 (차종, 품번, 부품명, 현상코드, 현상명, 생산월, 판매월, 수리월, 사용개월, 주행거리, 판매국가, VIN, 공장)
-    st.markdown("#### 🔍 조회 조건 필터")
-    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+        # 필터 UI 배치 (4열)
+        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
 
-    with f_col1:
-        selected_part = st.selectbox("품번 / 부품명 선택", ["전체"] + list(df['부품명'].unique()))
-        selected_model = st.selectbox("차종 선택", ["전체"] + list(df['차종'].unique()))
-    with f_col2:
-        selected_phenomenon = st.selectbox("현상명 선택", ["전체"] + list(df['현상명'].unique()))
-        selected_country = st.selectbox("판매국가 선택", ["전체"] + list(df['판매국가'].unique()))
-    with f_col3:
-        selected_plant = st.selectbox("공장 선택", ["전체"] + list(df['공장'].unique()))
-    with f_col4:
-        # 사용개월 슬라이더 필터
-        max_usage = int(df['사용개월'].max()) if not df.empty else 60
-        selected_usage = st.slider("사용개월 최대값", 0, max_usage, max_usage)
+        with f_col1:
+            car_types = ["전체"] + sorted(list(df['차종'].dropna().unique())) if '차종' in df.columns else ["전체"]
+            selected_car = st.selectbox("차종", car_types)
 
-    # 데이터 필터링 적용
-    filtered_df = df.copy()
-    if selected_part != "전체":
-        filtered_df = filtered_df[filtered_df['부품명'] == selected_part]
-    if selected_model != "전체":
-        filtered_df = filtered_df[filtered_df['차종'] == selected_model]
-    if selected_phenomenon != "전체":
-        filtered_df = filtered_df[filtered_df['현상명'] == selected_phenomenon]
-    if selected_country != "전체":
-        filtered_df = filtered_df[filtered_df['판매국가'] == selected_country]
-    if selected_plant != "전체":
-        filtered_df = filtered_df[filtered_df['공장'] == selected_plant]
-    filtered_df = filtered_df[filtered_df['사용개월'] <= selected_usage]
+            part_nos = ["전체"] + sorted(list(df['품번'].dropna().unique())) if '품번' in df.columns else ["전체"]
+            selected_part_no = st.selectbox("품번", part_nos)
 
-    st.markdown("---")
+            part_names = ["전체"] + sorted(list(df['부품명'].dropna().unique())) if '부품명' in df.columns else ["전체"]
+            selected_part_name = st.selectbox("부품명", part_names)
 
-    # 3. 상단: 꺾은선 그래프 (수리월 / 생산월 기준 추이 분석)
-    st.markdown("### 1. 차종/기간별 클레임 추이 분석 (꺾은선 그래프)")
-    if not filtered_df.empty and '수리월' in filtered_df.columns:
-        trend_data = filtered_df.groupby('수리월').size().reset_index(name='클레임 건수')
-        st.line_chart(trend_data.set_index('수리월'))
+        with f_col2:
+            phen_codes = ["전체"] + sorted(list(df['현상코드'].dropna().unique())) if '현상코드' in df.columns else ["전체"]
+            selected_phen_code = st.selectbox("현상코드", phen_codes)
+
+            phen_names = ["전체"] + sorted(list(df['현상명'].dropna().unique())) if '현상명' in df.columns else ["전체"]
+            selected_phen_name = st.selectbox("현상명", phen_names)
+
+            countries = ["전체"] + sorted(list(df['판매국가'].dropna().unique())) if '판매국가' in df.columns else ["전체"]
+            selected_country = st.selectbox("판매국가", countries)
+
+        with f_col3:
+            plants = ["전체"] + sorted(list(df['공장'].dropna().unique())) if '공장' in df.columns else ["전체"]
+            selected_plant = st.selectbox("공장", plants)
+
+            vins = ["전체"] + sorted(list(df['VIN'].dropna().unique())) if 'VIN' in df.columns else ["전체"]
+            selected_vin = st.selectbox("VIN", vins)
+
+            # AY~BL 추가 항목 필터 예시 (수리월 / 생산월 등)
+            repair_months = ["전체"] + sorted(list(df['수리월'].dropna().unique())) if '수리월' in df.columns else ["전체"]
+            selected_repair_month = st.selectbox("수리월", repair_months)
+
+        with f_col4:
+            prod_months = ["전체"] + sorted(list(df['생산월'].dropna().unique())) if '생산월' in df.columns else ["전체"]
+            selected_prod_month = st.selectbox("생산월", prod_months)
+
+            # 사용개월 / 주행거리 슬라이더 필터
+            max_usage = int(df['사용개월'].max()) if '사용개월' in df.columns and not df['사용개월'].isnull().all() else 60
+            selected_usage = st.slider("사용개월 최대값", 0, max_usage if max_usage > 0 else 60, max_usage if max_usage > 0 else 60)
+
+            max_mile = int(df['주행거리Km'].max()) if '주행거리Km' in df.columns and not df['주행거리Km'].isnull().all() else 100000
+            selected_mile = st.slider("주행거리(Km) 최대값", 0, max_mile if max_mile > 0 else 100000, max_mile if max_mile > 0 else 100000)
+
+        # 필터링 적용
+        filtered_df = df.copy()
+        if selected_car != "전체":
+            filtered_df = filtered_df[filtered_df['차종'] == selected_car]
+        if selected_part_no != "전체":
+            filtered_df = filtered_df[filtered_df['품번'] == selected_part_no]
+        if selected_part_name != "전체":
+            filtered_df = filtered_df[filtered_df['부품명'] == selected_part_name]
+        if selected_phen_code != "전체":
+            filtered_df = filtered_df[filtered_df['현상코드'] == selected_phen_code]
+        if selected_phen_name != "전체":
+            filtered_df = filtered_df[filtered_df['현상명'] == selected_phen_name]
+        if selected_country != "전체":
+            filtered_df = filtered_df[filtered_df['판매국가'] == selected_country]
+        if selected_plant != "전체":
+            filtered_df = filtered_df[filtered_df['공장'] == selected_plant]
+        if selected_vin != "전체":
+            filtered_df = filtered_df[filtered_df['VIN'] == selected_vin]
+        if selected_repair_month != "전체":
+            filtered_df = filtered_df[filtered_df['수리월'] == selected_repair_month]
+        if selected_prod_month != "전체":
+            filtered_df = filtered_df[filtered_df['생산월'] == selected_prod_month]
+        if '사용개월' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['사용개월'] <= selected_usage]
+        if '주행거리Km' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['주행거리Km'] <= selected_mile]
+
+        st.markdown("---")
+
+        # 3. 상단: 꺾은선 그래프 (수리월 / 생산월 기준 추이 분석)
+        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (꺾은선 그래프)")
+        if not filtered_df.empty and '수리월' in filtered_df.columns:
+            trend_data = filtered_df.groupby('수리월').size().reset_index(name='클레임 건수')
+            st.line_chart(trend_data.set_index('수리월'))
+        else:
+            st.info("표시할 트렌드 데이터가 없습니다.")
+
+        st.markdown("---")
+
+        # 4. 하단: 현상, 사용개월, 주행거리, 차종별 막대 그래프 분석
+        st.markdown("### 2. 다각도 클레임 현황 분석 (막대 그래프)")
+        
+        b_col1, b_col2 = st.columns(2)
+
+        with b_col1:
+            st.markdown("##### 📊 현상별 클레임 현황")
+            if not filtered_df.empty and '현상명' in filtered_df.columns:
+                phen_chart = filtered_df.groupby('현상명').size()
+                st.bar_chart(phen_chart)
+            else:
+                st.info("데이터 없음")
+
+            st.markdown("##### 📊 주행거리별 클레임 현황")
+            if not filtered_df.empty and '주행거리Km' in filtered_df.columns:
+                filtered_df['주행거리_구간'] = pd.cut(
+                    filtered_df['주행거리Km'], 
+                    bins=[0, 10000, 30000, 50000, 70000, 100000, 999999], 
+                    labels=['~10000', '~30000', '~50000', '~70000', '~100000', '100000~']
+                )
+                mile_chart = filtered_df.groupby('주행거리_구간', observed=False).size()
+                st.bar_chart(mile_chart)
+            else:
+                st.info("데이터 없음")
+
+        with b_col2:
+            st.markdown("##### 📊 사용개월별 클레임 현황")
+            if not filtered_df.empty and '사용개월' in filtered_df.columns:
+                usage_chart = filtered_df.groupby('사용개월').size()
+                st.bar_chart(usage_chart)
+            else:
+                st.info("데이터 없음")
+
+            st.markdown("##### 📊 차종별 클레임 현황")
+            if not filtered_df.empty and '차종' in filtered_df.columns:
+                model_chart = filtered_df.groupby('차종').size()
+                st.bar_chart(model_chart)
+            else:
+                st.info("데이터 없음")
+
+        st.markdown("---")
+        st.markdown(f"##### 📋 선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
+        st.dataframe(filtered_df, use_container_width=True)
     else:
-        st.info("표시할 트렌드 데이터가 없습니다.")
-
-    st.markdown("---")
-
-    # 4. 하단: 현상, 사용개월, 주행거리, 차종, 지역별 막대 그래프 분석
-    st.markdown("### 2. 다각도 클레임 현황 분석 (막대 그래프)")
-    
-    b_col1, b_col2 = st.columns(2)
-
-    with b_col1:
-        st.markdown("##### 📊 현상별 클레임 현황")
-        if not filtered_df.empty:
-            phen_chart = filtered_df.groupby('현상명').size()
-            st.bar_chart(phen_chart)
-        else:
-            st.info("데이터 없음")
-
-        st.markdown("##### 📊 주행거리별 클레임 현황")
-        if not filtered_df.empty:
-            # 주행거리 구간화 예시
-            filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리'], bins=[0, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~10000', '~30000', '~50000', '~70000', '~100000', '100000~'])
-            mile_chart = filtered_df.groupby('주행거리_구간', observed=False).size()
-            st.bar_chart(mile_chart)
-
-    with b_col2:
-        st.markdown("##### 📊 사용개월별 클레임 현황")
-        if not filtered_df.empty:
-            usage_chart = filtered_df.groupby('사용개월').size()
-            st.bar_chart(usage_chart)
-        else:
-            st.info("데이터 없음")
-
-        st.markdown("##### 📊 차종별 클레임 현황")
-        if not filtered_df.empty:
-            model_chart = filtered_df.groupby('차종').size()
-            st.bar_chart(model_chart)
-
-    st.markdown("---")
-    st.markdown("##### 📋 상세 RAW DATA 테이블 조회")
-    st.dataframe(filtered_df, use_container_width=True)
+        st.warning("분석할 클레임 데이터 파일이 없습니다. 엑셀 파일을 업로드해 주세요.")
 
 elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
