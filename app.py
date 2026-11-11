@@ -233,12 +233,33 @@ elif menu == "필드 클레임 현황":
         st.markdown("<br>", unsafe_allow_html=True)
         load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
 
-    # BL열(인덱스 63번) 및 BH열(인덱스 59번)을 명확하게 '현상명', '현상상세'로 강제 매핑하는 전처리 함수
+    # 엑셀 파일의 컬럼 중복 및 BL열(인덱스 63) 데이터를 안전하게 '현상명'으로 지정하는 함수
     def process_raw_dataframe(df_raw):
+        # 중복된 컬럼명 방지 처리 (예: 현상명, 현상명.1 등)
+        cols = list(df_raw.columns)
+        
+        # BL열(인덱스 63)이 존재하면 해당 열을 명확하게 '현상명'으로 지정 (기존 7번 인덱스의 '현상명'과 충돌하지 않도록 리스트 직접 조작)
+        if len(cols) > 63:
+            cols[63] = '현상명'
+        if len(cols) > 59:
+            cols[59] = '현상상세'
+            
+        # 중복 컬럼명이 있을 경우 구분자 부여 (.1, .2 등)
+        seen = {}
+        new_cols = []
+        for c in cols:
+            if c in seen:
+                seen[c] += 1
+                new_cols.append(f"{c}_{seen[c]}")
+            else:
+                seen[c] = 0
+                new_cols.append(c)
+        df_raw.columns = new_cols
+        
+        # 확실하게 BL열(인덱스 63) 값을 분석용 '현상명'으로 재할당
         if len(df_raw.columns) > 63:
-            df_raw.rename(columns={df_raw.columns[63]: '현상명'}, inplace=True)
-        if len(df_raw.columns) > 59:
-            df_raw.rename(columns={df_raw.columns[59]: '현상상세'}, inplace=True)
+            df_raw['현상명'] = df_raw.iloc[:, 63].astype(str)
+            
         return df_raw
 
     if uploaded_file is not None:
