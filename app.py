@@ -71,6 +71,7 @@ if 'editing_task_id' not in st.session_state: st.session_state['editing_task_id'
 # 클레임 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
+if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/..."
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
@@ -223,9 +224,15 @@ if menu == "업무 현황":
 # --- 2. 필드 클레임 현황 메뉴 ---
 elif menu == "필드 클레임 현황":
     st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
-    st.markdown("클레임 RAW DATA 엑셀 파일을 업로드하여 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
+    st.markdown("구글 시트에 등록된 데이터를 불러오거나 엑셀 파일을 업로드하여 클레임 분석을 진행하세요.")
 
-    uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
+    # 파일 업로드 및 구글 시트 자동 조회 버튼 영역
+    col_up1, col_up2 = st.columns([2, 1])
+    with col_up1:
+        uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
+    with col_up2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
 
     if uploaded_file is not None:
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
@@ -238,6 +245,21 @@ elif menu == "필드 클레임 현황":
             except Exception as e:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
+    if load_gsheet_btn:
+        try:
+            # 공개된 구글 스프레드시트 CSV 내보내기 링크 변환 방식 지원
+            sheet_url = st.session_state['gsheet_url']
+            if "edit?usp=sharing" in sheet_url or "/edit" in sheet_url:
+                export_url = sheet_url.split('/edit')[0] + '/export?format=csv'
+            else:
+                export_url = sheet_url
+            
+            st.session_state['claim_df'] = pd.read_csv(export_url)
+            st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"구글 시트 연동 중 오류 발생: {e}. '구글 시트 연동 설정' 메뉴에서 URL이 올바른지 확인해주세요.")
+
     df = st.session_state['claim_df']
 
     if not df.empty:
@@ -247,7 +269,6 @@ elif menu == "필드 클레임 현황":
         def get_multiselect_filter(label, col_name):
             if col_name in df.columns:
                 options = sorted([str(x) for x in df[col_name].dropna().unique()])
-                # st.multiselect 자체의 내장 검색 및 선택 상태 유지 기능 활용
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
@@ -315,7 +336,7 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 3. 상단 추이 분석 그래프 (생산월: 파란색 막대 [좌측 축] & 수리월: 빨간색 꺾은선 [우측 축])
+        # 1. 상단 추이 분석 그래프 (생산월: 파란색 막대 [좌측 축] & 수리월: 빨간색 꺾은선 [우측 축])
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 [좌측 축] & 수리월 빨간색 꺾은선 [우측 축])")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
@@ -330,29 +351,12 @@ elif menu == "필드 클레임 현황":
 
             if not chart_df.empty:
                 fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-                # 생산월 파란색 막대 그래프 -> 좌측 축 (y1)
                 if '생산건수' in chart_df.columns:
-                    fig.add_trace(
-                        go.Bar(x=chart_df.index, y=chart_df['생산건수'], name="생산월 클레임 (막대)", marker=dict(color="#3b82f6", opacity=0.7)),
-                        secondary_y=False
-                    )
-
-                # 수리월 빨간색 꺾은선 그래프 -> 우측 축 (y2)
+                    fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['생산건수'], name="생산월 클레임 (막대)", marker=dict(color="#3b82f6", opacity=0.7)), secondary_y=False)
                 if '수리건수' in chart_df.columns:
-                    fig.add_trace(
-                        go.Scatter(x=chart_df.index, y=chart_df['수리건수'], name="수리월 클레임 (꺾은선)", line=dict(color="#ef4444", width=3), mode='lines+markers'),
-                        secondary_y=True
-                    )
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['수리건수'], name="수리월 클레임 (꺾은선)", line=dict(color="#ef4444", width=3), mode='lines+markers'), secondary_y=True)
 
-                fig.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="#0e1117",
-                    plot_bgcolor="#0e1117",
-                    height=450,
-                    margin=dict(l=40, r=40, t=30, b=40),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
+                fig.update_layout(template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", height=450, margin=dict(l=40, r=40, t=30, b=40), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
                 fig.update_yaxes(title_text="<b>생산건수 (좌측)</b>", secondary_y=False, showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
                 fig.update_yaxes(title_text="<b>수리건수 (우측)</b>", secondary_y=True, showgrid=False)
                 fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
@@ -365,29 +369,66 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 4. 하단 다각도 분석 막대 그래프
-        st.markdown("### 2. 다각도 클레임 현황 분석 (막대 그래프)")
-        b_col1, b_col2 = st.columns(2)
+        # 2. 하단 다각도 분석 (수평 막대 그래프 + 막대 끝 숫자 표기)
+        st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
+        
+        def plot_horizontal_bar(data_series, title_text):
+            if data_series.empty:
+                st.info("데이터 없음")
+                return
+            data_series = data_series.sort_values(ascending=True) # 오름차순 정렬해야 가로축 위쪽부터 큰 값이 나옴
+            fig = go.Figure(go.Bar(
+                x=data_series.values,
+                y=data_series.index,
+                orientation='h',
+                text=data_series.values,
+                textposition='auto',
+                marker=dict(color='#3b82f6')
+            ))
+            fig.update_layout(
+                title=title_text,
+                template="plotly_dark",
+                paper_bgcolor="#0e1117",
+                plot_bgcolor="#0e1117",
+                height=400,
+                margin=dict(l=100, r=40, t=40, b=40)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        with b_col1:
+        hb_col1, hb_col2 = st.columns(2)
+
+        with hb_col1:
             st.markdown("##### 📊 현상명별 클레임 현황")
-            if '현상명' in filtered_df.columns: st.bar_chart(filtered_df.groupby('현상명').size())
+            if '현상명' in filtered_df.columns:
+                plot_horizontal_bar(filtered_df.groupby('현상명').size(), "")
+            else:
+                st.info("데이터 없음")
+
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
-                st.bar_chart(filtered_df.groupby('주행거리_구간', observed=False).size())
+                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "")
+            else:
+                st.info("데이터 없음")
 
-        with b_col2:
+        with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
-            if '사용개월' in filtered_df.columns: st.bar_chart(filtered_df.groupby('사용개월').size())
+            if '사용개월' in filtered_df.columns:
+                plot_horizontal_bar(filtered_df.groupby('사용개월').size(), "")
+            else:
+                st.info("데이터 없음")
+
             st.markdown("##### 📊 차종별 클레임 현황")
-            if '차종' in filtered_df.columns: st.bar_chart(filtered_df.groupby('차종').size())
+            if '차종' in filtered_df.columns:
+                plot_horizontal_bar(filtered_df.groupby('차종').size(), "")
+            else:
+                st.info("데이터 없음")
 
         st.markdown("---")
         st.markdown(f"##### 📋 선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
         st.dataframe(filtered_df, use_container_width=True)
     else:
-        st.info("분석할 클레임 엑셀 파일을 업로드해 주세요.")
+        st.info("분석할 클레임 엑셀 파일을 업로드하거나, 상단의 '구글 시트 데이터 자동 불러오기' 버튼을 눌러주세요.")
 
 # --- 3. 개선 활동 관리 메뉴 ---
 elif menu == "개선 활동 관리":
@@ -409,7 +450,7 @@ elif menu == "고객사 클레임 비용 분석":
 # --- 5. 구글 시트 연동 설정 메뉴 ---
 elif menu == "구글 시트 연동 설정":
     st.subheader("구글 드라이브 & 스프레드시트 연동")
-    st.text_input("필드 클레임 현황 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
-    st.text_input("고객사 클레임 비용 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
+    gsheet_input = st.text_input("필드 클레임 현황 구글 시트 URL", st.session_state['gsheet_url'])
     if st.button("연동 정보 저장"):
-        st.success("구글 클라우드 스프레드시트와 성공적으로 연동되었습니다!")
+        st.session_state['gsheet_url'] = gsheet_input
+        st.success("구글 클라우드 스프레드시트 URL이 성공적으로 저장되었습니다! 이제 '필드 클레임 현황' 메뉴에서 '구글 시트 데이터 자동 불러오기'를 사용할 수 있습니다.")
