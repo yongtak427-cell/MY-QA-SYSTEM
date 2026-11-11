@@ -135,17 +135,16 @@ if menu == "업무 현황":
                         st.session_state['selected_date'] = current_d
                         st.rerun()
                     
-                    # 달력 칸 안의 카테고리 배지들을 Streamlit 버튼으로 구현하여 직접 클릭 가능하게 처리
+                    # 달력 칸 안에 카테고리 배지들을 Streamlit 버튼으로 구현하여 직접 클릭 가능하게 처리
                     for t in day_tasks[:6]:
                         cat = t['category']
-                        # 완료 여부 체크
                         if t['completed']:
                             badge_label = f"[완료] {cat}"
                         else:
                             badge_label = f"{cat}"
                         
                         # 카테고리 배지 버튼 생성 (누르면 해당 날짜 선택 및 하이라이트 토글)
-                        if st.button(badge_label, key=click_badge_{t['id']}, use_container_width=True):
+                        if st.button(badge_label, key=f"click_badge_{t['id']}", use_container_width=True):
                             st.session_state['selected_date'] = current_d
                             if st.session_state['highlighted_task_id'] == t['id']:
                                 st.session_state['highlighted_task_id'] = None
@@ -155,8 +154,6 @@ if menu == "업무 현황":
 
                     if len(day_tasks) > 6:
                         st.markdown(f"<div style='font-size:9px; color:gray; text-align:center;'>외 {len(day_tasks)-6}건</div>", unsafe_allow_html=True)
-                    
-                    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -171,7 +168,7 @@ if menu == "업무 현황":
             st.info("선택된 날짜에 등록된 업무가 없습니다. 우측에서 일정을 등록해 보세요.")
         else:
             for task in st.session_state['tasks']:
-                if str(task['date']) == str(st.session_state['selected_date'][cite: 16]):
+                if str(task['date']) == str(st.session_state['selected_date']):
                     # 선택된 항목일 경우 카드 전체에 빨간색 계열 테두리 적용
                     is_highlighted = (st.session_state['highlighted_task_id'] == task['id'])
                     
@@ -183,7 +180,7 @@ if menu == "업무 현황":
                     st.markdown(f"<div style='{box_style}'>", unsafe_allow_html=True)
                     
                     cols_t = st.columns([0.2, 0.8])
-                    is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=chk_{task['id']})
+                    is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                     
                     if is_checked != task['completed']:
                         task['completed'] = is_checked
