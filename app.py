@@ -3,8 +3,8 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 
-# 페이지 설정 (브라우저 탭 이름 변경)
-st.set_page_config(page_title="TIKITAK Task Management", page_icon="🖥️", layout="wide")
+# 페이지 설정 (레이아웃 넓게 설정)
+st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
 # CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
@@ -132,8 +132,8 @@ if menu == "업무 현황":
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                     
-                    # 달력 칸 안에는 오직 카테고리 내용만 표시 (최대 6개)
-                    task_preview = ""
+                    # 달력 칸 안에 카테고리만 한 줄에 2개씩 배치 (최대 6개)
+                    badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
                         # 카테고리별 색상 매칭 (고객제출: 빨강계열, 자료작성: 초록계열, 업체접수: 파랑계열)
@@ -151,12 +151,13 @@ if menu == "업무 현황":
                         else:
                             t_style = f"color: {fg};"
 
-                        task_preview += f"<div style='font-size:11px; background:{bg}; color:{fg}; padding:2px 4px; margin-bottom:2px; border-radius:3px; text-align:center;'><b style='{t_style}'>{cat}</b></div>"
+                        badges_html += f"<span style='font-size:10px; background:{bg}; color:{fg}; padding:1px 4px; border-radius:3px; white-space:nowrap;'><b style='{t_style}'>{cat}</b></span>"
+                    badges_html += "</div>"
                     
                     if len(day_tasks) > 6:
-                        task_preview += f"<div style='font-size:9px; color:gray; text-align:center;'>외 {len(day_tasks)-6}건</div>"
+                        badges_html += f"<div style='font-size:9px; color:gray; margin-top:2px;'>외 {len(day_tasks)-6}건</div>"
                         
-                    st.markdown(f"<div style='min-height:70px;'>{task_preview}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='min-height:70px;'>{badges_html}</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -189,89 +190,3 @@ if menu == "업무 현황":
                             c_bg, c_fg = "#fee2e2", "#991b1b"
                         elif cat == '자료작성':
                             c_bg, c_fg = "#dcfce7", "#166534"
-                        else:
-                            c_bg, c_fg = "#dbeafe", "#1e40af"
-
-                        # 완료 시 어두운 회색 처리, 미완료 시 흰색 글씨
-                        if task['completed']:
-                            cols_t[1].markdown(f"""
-                                <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
-                                <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
-                                    <b>요청자:</b> {task['requester']}<br>
-                                    <b>마감기한:</b> {task['deadline']}<br>
-                                    <b>메모 및 상세 내용:</b> {task['memo']}
-                                </div>
-                                <small style='color:#22c55e;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
-                            """, unsafe_allow_html=True)
-                        else:
-                            cols_t[1].markdown(f"""
-                                <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
-                                <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
-                                    <b>요청자:</b> {task['requester']}<br>
-                                    <b>마감기한:</b> {task['deadline']}<br>
-                                    <b>메모 및 상세 내용:</b> {task['memo']}
-                                </div>
-                            """, unsafe_allow_html=True)
-
-    with col_right:
-        st.markdown("### ✍️ 신규 일정 등록")
-        with st.form("task_form_new", clear_on_submit=True):
-            f_title = st.text_input("업무 제목")
-            f_date = st.date_input("일정 날짜 (달력 반영일)", value=st.session_state['selected_date'])
-            f_deadline = st.date_input("마감 기한")
-            f_category = st.selectbox("카테고리 선택", ["고객제출", "업체접수", "자료작성"])
-            f_requester = st.text_input("요청자")
-            f_memo = st.text_area("메모 및 상세 내용")
-            
-            submitted = st.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
-            if submitted:
-                if f_title.strip() == "":
-                    st.warning("업무 제목을 입력해주세요.")
-                else:
-                    new_id = len(st.session_state['tasks']) + 1
-                    new_task = {
-                        "id": new_id,
-                        "title": f_title,
-                        "date": f_date,
-                        "deadline": f_deadline,
-                        "memo": f_memo,
-                        "requester": f_requester,
-                        "category": f_category,
-                        "completed": False,
-                        "completed_date": None
-                    }
-                    st.session_state['tasks'].append(new_task)
-                    st.success("일정이 성공적으로 저장되었습니다!")
-                    st.rerun()
-
-elif menu == "필드 클레임 현황":
-    st.subheader("생산 품목별 필드 클레임 누적 현황")
-    st.markdown("구글 시트 원본 데이터 기반 자동 집계 분석 화면입니다.")
-    chart_data = pd.DataFrame({'클레임 발생 건수': [65, 42, 25, 10]}, index=['쿨런트 펌프 (K3)', '워터 펌프 (Cee\'d)', '쿨런트 펌프 (쏘렌토)', '기타 부품'])
-    st.bar_chart(chart_data)
-
-elif menu == "개선 활동 관리":
-    st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
-    data = {
-        "품번 / 부품명": ["251002B700 (쿨런트 펌프)", "251003CAC0 (PUMP ASSY)"],
-        "주요 불량 현상": ["엔진 소음/이음", "성능 불량 / 누수"],
-        "개선 조치 내용": ["임펠러 금형 수정 및 실링재 변경", "하우스 가스켓 조립 공정 치구 보완"],
-        "적용 시점": ["2026-07-15 (Lot: 26G15)", "2026-11-01 (예정)"],
-        "상태": ["적용 완료", "적용 대기"]
-    }
-    st.table(pd.DataFrame(data))
-
-elif menu == "고객사 클레임 비용 분석":
-    st.subheader("고객사별 클레임 비용 2차 가공 및 분석")
-    st.info("현대, 모비스, 현대위아, 글로비스 원본 시트 자동 취합 및 환율/분담율 계산 결과가 여기에 표시됩니다.")
-    cost_data = {"고객사": ["현대 / 글로비스", "현대위아", "모비스"], "합산/청구 비용": ["₩ 18,450,000", "₩ 12,300,000", "₩ 11,830,000"]}
-    st.dataframe(pd.DataFrame(cost_data), use_container_width=True)
-
-elif menu == "구글 시트 연동 설정":
-    st.subheader("구글 드라이브 & 스프레드시트 연동")
-    st.text_input("필드 클레임 현황 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
-    st.text_input("고객사 클레임 비용 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
-    if st.button("연동 정보 저장"):
-        st.success("구글 클라우드 스프레드시트와 성공적으로 연동되었습니다!")
