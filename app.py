@@ -4,7 +4,7 @@ from datetime import datetime, date
 import calendar
 
 # 페이지 설정 (레이아웃 넓게 설정)
-st.set_page_config(page_title="TIKITAK Task Management", page_icon="🖥️", layout="wide")
+st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
 # CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
@@ -31,7 +31,7 @@ st.markdown("""
 # 메인 타이틀
 st.title("Quality Assurance/Management")
 
-# 세션 스테이트 초기화
+# 세션 스테이트 초기화 (업무 현황용)
 if 'tasks' not in st.session_state:
     st.session_state['tasks'] = [
         {
@@ -66,8 +66,6 @@ if 'cal_month' not in st.session_state:
     st.session_state['cal_month'] = datetime.today().month
 if 'selected_date' not in st.session_state:
     st.session_state['selected_date'] = date.today()
-
-# 수정 모드 관리를 위한 세션 스테이트
 if 'editing_task_id' not in st.session_state:
     st.session_state['editing_task_id'] = None
 
@@ -136,7 +134,6 @@ if menu == "업무 현황":
                         st.session_state['selected_date'] = current_d
                         st.rerun()
                     
-                    # 달력 칸 안에 카테고리별 색상 배지 생성 (한 줄에 2개씩 배치)
                     badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
@@ -163,7 +160,6 @@ if menu == "업무 현황":
 
     st.markdown("---")
 
-    # 하단 분할: 좌측(당일 업무 및 완료 처리) / 우측(신규 일정 등록 및 수정 폼)
     col_left, col_right = st.columns(2)
 
     with col_left:
@@ -184,7 +180,6 @@ if menu == "업무 현황":
                     task['completed_date'] = str(date.today()) if is_checked else None
                     st.rerun()
 
-                # 내용 수정 버튼
                 if cols_t[2].button("✏️ 수정", key=f"edit_btn_{task['id']}"):
                     st.session_state['editing_task_id'] = task['id']
                     st.rerun()
@@ -197,7 +192,6 @@ if menu == "업무 현황":
                 else:
                     c_bg, c_fg = "#fef08a", "#854d0e"
 
-                # 수정일자 표기 (수정된 적이 있는 경우에만 카테고리 옆에 표시)
                 update_tag = f" | <span style='color: #f59e0b; font-size: 12px;'>수정일자 : {task['updated_date']}</span>" if task.get('updated_date') else ""
 
                 if task['completed']:
@@ -228,7 +222,6 @@ if menu == "업무 현황":
                 cols_t[1].markdown(card_html, unsafe_allow_html=True)
 
     with col_right:
-        # 수정 모드인지 신규 등록 모드인지 확인
         editing_task = None
         if st.session_state['editing_task_id'] is not None:
             for t in st.session_state['tasks']:
@@ -244,7 +237,6 @@ if menu == "업무 현황":
         else:
             st.markdown("### ✍️ 신규 일정 등록")
 
-        # 폼 내부 기본값 설정 (수정 모드면 기존 데이터, 신규면 빈 값/오늘 날짜)
         def_title = editing_task['title'] if editing_task else ""
         def_date = editing_task['date'] if editing_task else st.session_state['selected_date']
         def_deadline = editing_task['deadline'] if editing_task else date.today()
@@ -263,7 +255,6 @@ if menu == "업무 현황":
             f_requester = st.text_input("요청자", value=def_requester)
             f_memo = st.text_area("메모 및 상세 내용", value=def_memo)
             
-            # 버튼 영역 분할 (신규 등록 vs 내용 수정)
             col_f1, col_f2 = st.columns(2)
             submitted_new = col_f1.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
             submitted_update = col_f2.form_submit_button("내용 수정/등록", use_container_width=True)
@@ -297,7 +288,6 @@ if menu == "업무 현황":
                 elif f_title.strip() == "":
                     st.warning("업무 제목을 입력해주세요.")
                 else:
-                    # 데이터 갱신 및 수정일자(오늘 날짜) 자동 기입
                     editing_task['title'] = f_title
                     editing_task['date'] = f_date
                     editing_task['deadline'] = f_deadline
@@ -311,10 +301,127 @@ if menu == "업무 현황":
                     st.rerun()
 
 elif menu == "필드 클레임 현황":
-    st.subheader("생산 품목별 필드 클레임 누적 현황")
-    st.markdown("구글 시트 원본 데이터 기반 자동 집계 분석 화면입니다.")
-    chart_data = pd.DataFrame({'클레임 발생 건수': [65, 42, 25, 10]}, index=['쿨런트 펌프 (K3)', '워터 펌프 (Cee\'d)', '쿨런트 펌프 (쏘렌토)', '기타 부품'])
-    st.bar_chart(chart_data)
+    st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
+    st.markdown("엑셀 파일을 업로드하여 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
+
+    # 1. 엑셀 파일 업로더
+    uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
+
+    @st.cache_data
+    def load_default_data():
+        # 기본 샘플 데이터 (사용자가 엑셀을 올리기 전 테스트용)
+        data = {
+            "차종": ["(JA) MORNING", "(AX1) AX1", "(AC3) I10 20", "(JA) MORNING", "(AX1) AX1", "(AC3) I10 20"],
+            "품번": ["25100-07010", "25100-07010", "25100-07010", "25100-07010", "25100-07010", "25100-07010"],
+            "부품명": ["카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi", "카파개선 1.0 MPi"],
+            "현상코드": ["E01", "E02", "E01", "E03", "E02", "E01"],
+            "현상명": ["엔진 소음", "냉각수 누수", "엔진 소음", "기타", "냉각수 누수", "엔진 소음"],
+            "생산월": ["23.01", "23.02", "23.01", "24.01", "24.02", "25.01"],
+            "판매월": ["23.03", "23.04", "23.03", "24.03", "24.04", "25.03"],
+            "수리월": ["24.01", "24.02", "24.03", "25.01", "25.02", "26.01"],
+            "사용개월": [10, 22, 35, 12, 10, 12],
+            "주행거리": [15000, 45000, 75000, 25000, 15000, 30000],
+            "판매국가": ["국내", "유럽", "인도", "국내", "유럽", "국내"],
+            "VIN": ["KMH123", "KMH456", "KMH789", "KMH111", "KMH222", "KMH333"],
+            "공장": ["화성", "서산", "인도법인", "화성", "서산", "화성"],
+            "건수": [1, 1, 1, 1, 1, 1]
+        }
+        return pd.DataFrame(data)
+
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            st.success(f"성공적으로 파일이 업로드되었습니다! (총 {len(df)}행)")
+        except Exception as e:
+            st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+            df = load_default_data()
+    else:
+        df = load_default_data()
+
+    st.markdown("---")
+
+    # 2. 조회 필터 항목 (차종, 품번, 부품명, 현상코드, 현상명, 생산월, 판매월, 수리월, 사용개월, 주행거리, 판매국가, VIN, 공장)
+    st.markdown("#### 🔍 조회 조건 필터")
+    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+
+    with f_col1:
+        selected_part = st.selectbox("품번 / 부품명 선택", ["전체"] + list(df['부품명'].unique()))
+        selected_model = st.selectbox("차종 선택", ["전체"] + list(df['차종'].unique()))
+    with f_col2:
+        selected_phenomenon = st.selectbox("현상명 선택", ["전체"] + list(df['현상명'].unique()))
+        selected_country = st.selectbox("판매국가 선택", ["전체"] + list(df['판매국가'].unique()))
+    with f_col3:
+        selected_plant = st.selectbox("공장 선택", ["전체"] + list(df['공장'].unique()))
+    with f_col4:
+        # 사용개월 슬라이더 필터
+        max_usage = int(df['사용개월'].max()) if not df.empty else 60
+        selected_usage = st.slider("사용개월 최대값", 0, max_usage, max_usage)
+
+    # 데이터 필터링 적용
+    filtered_df = df.copy()
+    if selected_part != "전체":
+        filtered_df = filtered_df[filtered_df['부품명'] == selected_part]
+    if selected_model != "전체":
+        filtered_df = filtered_df[filtered_df['차종'] == selected_model]
+    if selected_phenomenon != "전체":
+        filtered_df = filtered_df[filtered_df['현상명'] == selected_phenomenon]
+    if selected_country != "전체":
+        filtered_df = filtered_df[filtered_df['판매국가'] == selected_country]
+    if selected_plant != "전체":
+        filtered_df = filtered_df[filtered_df['공장'] == selected_plant]
+    filtered_df = filtered_df[filtered_df['사용개월'] <= selected_usage]
+
+    st.markdown("---")
+
+    # 3. 상단: 꺾은선 그래프 (수리월 / 생산월 기준 추이 분석)
+    st.markdown("### 1. 차종/기간별 클레임 추이 분석 (꺾은선 그래프)")
+    if not filtered_df.empty and '수리월' in filtered_df.columns:
+        trend_data = filtered_df.groupby('수리월').size().reset_index(name='클레임 건수')
+        st.line_chart(trend_data.set_index('수리월'))
+    else:
+        st.info("표시할 트렌드 데이터가 없습니다.")
+
+    st.markdown("---")
+
+    # 4. 하단: 현상, 사용개월, 주행거리, 차종, 지역별 막대 그래프 분석
+    st.markdown("### 2. 다각도 클레임 현황 분석 (막대 그래프)")
+    
+    b_col1, b_col2 = st.columns(2)
+
+    with b_col1:
+        st.markdown("##### 📊 현상별 클레임 현황")
+        if not filtered_df.empty:
+            phen_chart = filtered_df.groupby('현상명').size()
+            st.bar_chart(phen_chart)
+        else:
+            st.info("데이터 없음")
+
+        st.markdown("##### 📊 주행거리별 클레임 현황")
+        if not filtered_df.empty:
+            # 주행거리 구간화 예시
+            filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리'], bins=[0, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~10000', '~30000', '~50000', '~70000', '~100000', '100000~'])
+            mile_chart = filtered_df.groupby('주행거리_구간', observed=False).size()
+            st.bar_chart(mile_chart)
+
+    with b_col2:
+        st.markdown("##### 📊 사용개월별 클레임 현황")
+        if not filtered_df.empty:
+            usage_chart = filtered_df.groupby('사용개월').size()
+            st.bar_chart(usage_chart)
+        else:
+            st.info("데이터 없음")
+
+        st.markdown("##### 📊 차종별 클레임 현황")
+        if not filtered_df.empty:
+            model_chart = filtered_df.groupby('차종').size()
+            st.bar_chart(model_chart)
+
+    st.markdown("---")
+    st.markdown("##### 📋 상세 RAW DATA 테이블 조회")
+    st.dataframe(filtered_df, use_container_width=True)
 
 elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
