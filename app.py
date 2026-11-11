@@ -247,6 +247,7 @@ elif menu == "필드 클레임 현황":
         def get_multiselect_filter(label, col_name):
             if col_name in df.columns:
                 options = sorted([str(x) for x in df[col_name].dropna().unique()])
+                # st.multiselect 자체의 내장 검색 및 선택 상태 유지 기능 활용
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
