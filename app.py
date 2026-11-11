@@ -3,8 +3,6 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 import os
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
@@ -242,53 +240,41 @@ elif menu == "필드 클레임 현황":
 
     if not df.empty:
         st.markdown("---")
-        st.markdown("#### 🔍 클레임 조회 (검색어 입력 후 매칭된 항목 다중 선택)")
+        st.markdown("#### 🔍 클레임 조회 (직접 검색 및 다중 선택 가능)")
 
-        # 요청하신 검색 기반 다중선택 커스텀 컴포넌트 함수
-        def search_and_select_filter(label, col_name):
+        def get_multiselect_filter(label, col_name):
             if col_name in df.columns:
-                all_options = sorted([str(x) for x in df[col_name].dropna().unique()])
-                
-                # 1단계: 검색어 입력
-                search_text = st.text_input(f"{label} 검색", placeholder="검색어 입력 (예: 251007)...", key=f"search_{col_name}")
-                
-                # 검색어에 맞는 항목만 필터링하여 리스트업
-                if search_text:
-                    filtered_options = [opt for opt in all_options if search_text.lower() in opt.lower()]
-                else:
-                    filtered_options = all_options
-                
-                # 2단계: 필터링된 항목 중 다중 선택
-                selected = st.multiselect(f"{label} (선택)", filtered_options, key=f"select_{col_name}")
-                return selected
+                options = sorted([str(x) for x in df[col_name].dropna().unique()])
+                # st.multiselect 자체의 내장 검색 기능 활용 (선택 상태 영구 유지)
+                return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
-        # 요청하신 3줄 배치 구조 반영
+        # 요청하신 3줄 배치 구조 적용
         # 첫째 줄: 품번, 부품명, 차종, 현상명, 현상상세
         # 둘째 줄: 생산월, 판매월, 수리월, 사용개월, 주행거리
         # 셋째 줄: VIN, 판매국가, 공장
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
-        with r1_c1: selected_part_nos = search_and_select_filter("품번", "품번")
-        with r1_c2: selected_part_names = search_and_select_filter("부품명", "부품명")
-        with r1_c3: selected_cars = search_and_select_filter("차종", "차종")
-        with r1_c4: selected_phen_names = search_and_select_filter("현상명", "현상명")
-        with r1_c5: selected_phen_details = search_and_select_filter("현상상세", "현상상세")
+        with r1_c1: selected_part_nos = get_multiselect_filter("품번", "품번")
+        with r1_c2: selected_part_names = get_multiselect_filter("부품명", "부품명")
+        with r1_c3: selected_cars = get_multiselect_filter("차종", "차종")
+        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")
+        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세")
 
         r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
-        with r2_c1: selected_prod_months = search_and_select_filter("생산월", "생산월")
-        with r2_c2: selected_sales_months = search_and_select_filter("판매월", "판매월")
-        with r2_c3: selected_repair_months = search_and_select_filter("수리월", "수리월")
+        with r2_c1: selected_prod_months = get_multiselect_filter("생산월", "생산월")
+        with r2_c2: selected_sales_months = get_multiselect_filter("판매월", "판매월")
+        with r2_c3: selected_repair_months = get_multiselect_filter("수리월", "수리월")
         with r2_c4: 
             usage_options = [3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120]
-            selected_usages = st.multiselect("사용개월 선택", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월", key="filter_usage")
+            selected_usages = st.multiselect("사용개월", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월", key="filter_usage")
         with r2_c5:
             mile_options = [5000, 10000, 30000, 50000, 70000, 100000, 999999]
-            selected_miles = st.multiselect("주행거리 구간 선택", mile_options, format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하", key="filter_mile")
+            selected_miles = st.multiselect("주행거리 구간", mile_options, format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하", key="filter_mile")
 
         r3_c1, r3_c2, r3_c3 = st.columns(3)
-        with r3_c1: selected_vins = search_and_select_filter("VIN", "VIN")
-        with r3_c2: selected_countries = search_and_select_filter("판매국가", "판매국가")
-        with r3_c3: selected_plants = search_and_select_filter("공장", "공장")
+        with r3_c1: selected_vins = get_multiselect_filter("VIN", "VIN")
+        with r3_c2: selected_countries = get_multiselect_filter("판매국가", "판매국가")
+        with r3_c3: selected_plants = get_multiselect_filter("공장", "공장")
 
         # 필터링 적용 로직
         filtered_df = df.copy()
@@ -330,49 +316,22 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 3. 상단 추이 분석 그래프 (Plotly 활용: 유동적 크기 조절, 줌인/줌아웃, 꺾은선 좌측축 & 막대 우측축)
-        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (수리월 꺾은선 [좌측 축] & 생산월 파란색 막대 [우측 축])")
+        # 3. 상단 추이 분석 그래프 (하단 그래프와 동일한 Streamlit 네이티브 인터랙션 적용: 마우스 스크롤 확대/축소 가능)
+        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (수리월 꺾은선 & 생산월 막대 통합)")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
             if '수리월' in filtered_df.columns:
-                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수')
+                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수 (꺾은선)')
                 chart_df = pd.concat([chart_df, repair_trend], axis=1)
             if '생산월' in filtered_df.columns:
-                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수')
+                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수 (막대)')
                 chart_df = pd.concat([chart_df, prod_trend], axis=1)
             
             chart_df = chart_df.fillna(0).sort_index()
 
             if not chart_df.empty:
-                fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-                # 꺾은선 그래프 (수리월) -> 좌측 축 (y1)
-                if '수리건수' in chart_df.columns:
-                    fig.add_trace(
-                        go.Scatter(x=chart_df.index, y=chart_df['수리건수'], name="수리월 클레임 (꺾은선)", line=dict(color="#ef4444", width=3), mode='lines+markers'),
-                        secondary_y=False
-                    )
-
-                # 막대 그래프 (생산월) -> 우측 축 (y2)
-                if '생산건수' in chart_df.columns:
-                    fig.add_trace(
-                        go.Bar(x=chart_df.index, y=chart_df['생산건수'], name="생산월 클레임 (막대)", marker=dict(color="#3b82f6", opacity=0.5)),
-                        secondary_y=True
-                    )
-
-                fig.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="#0e1117",
-                    plot_bgcolor="#0e1117",
-                    height=450,
-                    margin=dict(l=40, r=40, t=30, b=40),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                fig.update_yaxes(title_text="<b>수리건수</b>", secondary_y=False, showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
-                fig.update_yaxes(title_text="<b>생산건수</b>", secondary_y=True, showgrid=False)
-                fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
-
-                st.plotly_chart(fig, use_container_width=True)
+                # 하단 다각도 현상 분석 그래프처럼 스트림릿 네이티브 bar_chart 활용하여 일관성 및 스크롤 확대/축소 편의성 제공
+                st.bar_chart(chart_df, color=["#ef4444", "#3b82f6"])
             else:
                 st.info("시각화할 데이터가 없습니다.")
         else:
