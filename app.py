@@ -237,7 +237,7 @@ elif menu == "필드 클레임 현황":
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
             try:
                 raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, sheet_name=0)
-                # 열 이름 매핑 확보 (BL열: 현상명, BH열: 현상상세)
+                # BL열(현상명), BH열(현상상세) 컬럼명 매핑 보장
                 if len(raw_df.columns) > 63:
                     raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
                 if len(raw_df.columns) > 59:
@@ -268,19 +268,24 @@ elif menu == "필드 클레임 현황":
         st.markdown("---")
         st.markdown("#### 🔍 클레임 조회 (직접 검색 및 다중 선택 가능)")
 
-        def get_multiselect_filter(label, col_name):
+        def get_multiselect_filter(label, col_name, custom_options=None):
             if col_name in df.columns:
-                options = sorted([str(x) for x in df[col_name].dropna().unique()])
+                if custom_options is not None:
+                    options = custom_options
+                else:
+                    options = sorted([str(x) for x in df[col_name].dropna().unique()])
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
-        # 요청하신 3줄 배치 구조 반영 (현상명: BL열 기준 / 현상상세: BH열 기준)
+        # 요청하신 항목별 배치 (현상명은 '누수', '소음', '기타'만 검색/선택 가능하게 설정)
+        phenomenon_options = ["누수", "소음", "기타"]
+
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
         with r1_c1: selected_part_nos = get_multiselect_filter("품번", "품번")
         with r1_c2: selected_part_names = get_multiselect_filter("부품명", "부품명")
         with r1_c3: selected_cars = get_multiselect_filter("차종", "차종")
-        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")       # BL열 데이터
-        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세") # BH열 데이터
+        with r1_c4: selected_phen_names = get_multiselect_filter("현상명 (누수/소음/기타)", "현상명", custom_options=phenomenon_options)
+        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세")
 
         r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
         with r2_c1: selected_prod_months = get_multiselect_filter("생산월", "생산월")
@@ -303,8 +308,17 @@ elif menu == "필드 클레임 현황":
         if selected_part_nos: filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
         if selected_part_names: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
         if selected_cars: filtered_df = filtered_df[filtered_df['차종'].astype(str).isin(selected_cars)]
-        if selected_phen_names: filtered_df = filtered_df[filtered_df['현상명'].astype(str).isin(selected_phen_names)]
-        if selected_phen_details and '현상상세' in filtered_df.columns: filtered_df = filtered_df[filtered_df['현상상세'].astype(str).isin(selected_phen_details)]
+        
+        # 현상명(BL열) 필터링: 사용자가 선택한 '누수', '소음', '기타' 키워드가 포함된 데이터 매칭
+        if selected_phen_names and '현상명' in filtered_df.columns:
+            phen_mask = pd.Series(False, index=filtered_df.index)
+            for p in selected_phen_names:
+                phen_mask |= filtered_df['현상명'].astype(str).str.contains(p, case=False, na=False)
+            filtered_df = filtered_df[phen_mask]
+
+        if selected_phen_details and '현상상세' in filtered_df.columns: 
+            filtered_df = filtered_df[filtered_df['현상상세'].astype(str).isin(selected_phen_details)]
+
         if selected_prod_months: filtered_df = filtered_df[filtered_df['생산월'].astype(str).isin(selected_prod_months)]
         if selected_sales_months and '판매월' in filtered_df.columns: filtered_df = filtered_df[filtered_df['판매월'].astype(str).isin(selected_sales_months)]
         if selected_repair_months: filtered_df = filtered_df[filtered_df['수리월'].astype(str).isin(selected_repair_months)]
@@ -371,21 +385,20 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석 (수평 막대 그래프: 상위 항목만 추출 및 폰트/여백 최적화로 가독성 확보)
+        # 2. 하단 다각도 분석 (수평 막대 그래프: 누수/소음/기타 집계 및 사용개월 높이 최적화)
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
-        def plot_horizontal_bar(data_series, title_text, top_n=15):
+        def plot_horizontal_bar(data_series, title_text, top_n=15, height=450):
             if data_series.empty:
                 st.info("데이터 없음")
                 return
-            # 데이터가 너무 많을 경우 상위 top_n개만 추려서 가독성 극대화
             if len(data_series) > top_n:
                 data_series = data_series.nlargest(top_n)
             data_series = data_series.sort_values(ascending=True)
             
             fig = go.Figure(go.Bar(
                 x=data_series.values,
-                y=data_series.index,
+                y=[str(i) for i in data_series.index],
                 orientation='h',
                 text=data_series.values,
                 textposition='auto',
@@ -396,39 +409,46 @@ elif menu == "필드 클레임 현황":
                 template="plotly_dark",
                 paper_bgcolor="#0e1117",
                 plot_bgcolor="#0e1117",
-                height=450,
+                height=height,
                 margin=dict(l=150, r=50, t=30, b=30),
                 xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-                yaxis=dict(tickfont=dict(size=11))
+                yaxis=dict(tickfont=dict(size=11), type='category')
             )
             st.plotly_chart(fig, use_container_width=True)
 
         hb_col1, hb_col2 = st.columns(2)
 
         with hb_col1:
-            st.markdown("##### 📊 현상명별 클레임 현황 (상위 항목)")
+            st.markdown("##### 📊 현상명별 클레임 현황 (누수 / 소음 / 기타)")
             if '현상명' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('현상명').size(), "")
+                # 누수, 소음, 기타 카테고리별 집계 생성
+                leak_count = filtered_df['현상명'].astype(str).str.contains("누수", case=False, na=False).sum()
+                noise_count = filtered_df['현상명'].astype(str).str.contains("소음|이음", case=False, na=False).sum()
+                other_count = len(filtered_df) - (leak_count + noise_count)
+                phen_summary = pd.Series({"누수": leak_count, "소음": noise_count, "기타": max(0, other_count)})
+                plot_horizontal_bar(phen_summary, "", top_n=3, height=300)
             else:
                 st.info("데이터 없음")
 
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
-                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "", top_n=10)
+                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "", top_n=10, height=350)
             else:
                 st.info("데이터 없음")
 
         with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('사용개월').size(), "", top_n=15)
+                # 사용개월별 데이터 높이 축소 및 가독성 최적화
+                usage_series = filtered_df.groupby('사용개월').size()
+                plot_horizontal_bar(usage_series, "", top_n=20, height=380)
             else:
                 st.info("데이터 없음")
 
             st.markdown("##### 📊 차종별 클레임 현황 (상위 항목)")
             if '차종' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('차종').size(), "", top_n=15)
+                plot_horizontal_bar(filtered_df.groupby('차종').size(), "", top_n=15, height=380)
             else:
                 st.info("데이터 없음")
 
