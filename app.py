@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
+import calendar
 
 # 페이지 설정
 st.set_page_config(page_title="QA & 필드 클레임 통합 관리", page_icon="📊", layout="wide")
 
-# 사이드바 메뉴 CSS (글씨 키우기, 아이콘 제거)
+# 사이드바 메뉴 스타일 및 달력 CSS 커스텀
 st.markdown("""
     <style>
     section[data-testid="stSidebar"] .stRadio label {
@@ -13,12 +14,19 @@ st.markdown("""
         font-weight: 600 !important;
         padding: 6px 0px;
     }
+    .calendar-box {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: #ffffff;
+        min-height: 90px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("📊 품질보증 및 필드 클레임 통합 관리 대시보드")
 
-# 세션 스테이트 초기화 (일정 및 업무 데이터 유지용)
+# 세션 스테이트 초기화
 if 'tasks' not in st.session_state:
     st.session_state['tasks'] = [
         {
@@ -45,6 +53,13 @@ if 'tasks' not in st.session_state:
         }
     ]
 
+if 'cal_year' not in st.session_state:
+    st.session_state['cal_year'] = datetime.today().year
+if 'cal_month' not in st.session_state:
+    st.session_state['cal_month'] = datetime.today().month
+if 'selected_date' not in st.session_state:
+    st.session_state['selected_date'] = date.today()
+
 # 사이드바 메뉴
 st.sidebar.markdown("## 🧭 메뉴 목록")
 menu = st.sidebar.radio(
@@ -56,16 +71,10 @@ menu = st.sidebar.radio(
 if menu == "업무 현황":
     st.subheader("📋 월별 캘린더 및 업무 일정 관리")
     
-    # 1. 달력 월 조작 세션 처리
-    if 'cal_year' not in st.session_state:
-        st.session_state['cal_year'] = datetime.today().year
-    if 'cal_month' not in st.session_state:
-        st.session_state['cal_month'] = datetime.today().month
-
     # 상단 달력 이동 컨트롤러
-    col_m1, col_m2, col_m3 = st.columns([1, 2, 1])
+    col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
     with col_m1:
-        if st.button("◀ 이전 달"):
+        if st.button("◀ 이전 달", use_container_width=True):
             if st.session_state['cal_month'] == 1:
                 st.session_state['cal_month'] = 12
                 st.session_state['cal_year'] -= 1
@@ -73,9 +82,9 @@ if menu == "업무 현황":
                 st.session_state['cal_month'] -= 1
             st.rerun()
     with col_m2:
-        st.markdown(f"<h3 style='text-align: center;'>{st.session_state['cal_year']}년 {st.session_state['cal_month']}월</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='text-align: center; margin: 0;'>{st.session_state['cal_year']}년 {st.session_state['cal_month']}월</h2>", unsafe_allow_html=True)
     with col_m3:
-        if st.button("다음 달 ▶"):
+        if st.button("다음 달 ▶", use_container_width=True):
             if st.session_state['cal_month'] == 12:
                 st.session_state['cal_month'] = 1
                 st.session_state['cal_year'] += 1
@@ -85,89 +94,91 @@ if menu == "업무 현황":
 
     st.markdown("---")
 
-    # 화면 분할 (좌측: 달력 및 당일 업무 / 우측: 일정 등록 폼)
-    col_left, col_right = st.columns([1.2, 1])
+    # 법정 공휴일 정의 (월, 일) 고정 공휴일 예시
+    holidays = [(1, 1), (3, 1), (5, 5), (6, 6), (8, 15), (10, 3), (10, 9), (12, 25)]
+
+    # 대형 달력 렌더링
+    selected_year = st.session_state['cal_year']
+    selected_month = st.session_state['cal_month']
+    cal_matrix = calendar.monthcalendar(selected_year, selected_month)
+
+    # 요일 헤더 (월~일)
+    days_kor = ["월", "화", "수", "목", "금", "토", "일"]
+    h_cols = st.columns(7)
+    for i, d_name in enumerate(days_kor):
+        color = "red" if i == 6 else ("blue" if i == 5 else "black")
+        h_cols[i].markdown(f"<p style='text-align: center; font-weight: bold; color: {color}; font-size: 16px;'>{d_name}</p>", unsafe_allow_html=True)
+
+    # 날짜 그리드 출력
+    for week in cal_matrix:
+        w_cols = st.columns(7)
+        for i, day in enumerate(week):
+            if day == 0:
+                w_cols[i].markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
+            else:
+                current_d = date(selected_year, selected_month, day)
+                is_holiday = (selected_month, day) in holidays or i == 6  # 주말(일) 또는 공휴일
+                num_color = "red" if is_holiday else "black"
+                
+                # 해당 날짜의 업무 리스트
+                day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
+                
+                with w_cols[i]:
+                    # 날짜 버튼을 셀 상단에 배치
+                    btn_text = f"📌 {day}일" if day_tasks else f"{day}"
+                    if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
+                        st.session_state['selected_date'] = current_d
+                    
+                    # 칸 안에 등록된 업무 제목 및 카테고리 표시
+                    task_preview = ""
+                    for t in day_tasks[:2]: # 최대 2개까지 표시
+                        short_title = (t['title'][:8] + '..') if len(t['title']) > 8 else t['title']
+                        badge_color = "#fee2e2" if t['category'] == '고객제출' else ("#e0f2fe" if t['category'] == '업체접수' else "#f3f4f6")
+                        task_preview += f"<div style='font-size:11px; background:{badge_color}; padding:2px 4px; margin-bottom:2px; border-radius:3px; overflow:hidden; white-space:nowrap;'><b>{short_title}</b></div>"
+                    if len(day_tasks) > 2:
+                        task_preview += f"<div style='font-size:10px; color:gray;'>외 {len(day_tasks)-2}건</div>"
+                        
+                    st.markdown(f"<div style='min-height:55px; font-size:12px;'>{task_preview}</div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # 하단 분할: 좌측(당일 업무 및 완료 처리) / 우측(신규 일정 등록)
+    col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown("#### 📅 월별 달력 및 날짜별 일정")
-        
-        # 선택한 날짜 저장을 위한 세션
-        if 'selected_date' not in st.session_state:
-            st.session_state['selected_date'] = date.today()
-
-        # 간단한 달력 날짜 선택 버튼 뷰 구현
-        selected_year = st.session_state['cal_year']
-        selected_month = st.session_state['cal_month']
-        
-        # 해당 월의 날짜 목록 생성
-        import calendar
-        cal_matrix = calendar.monthcalendar(selected_year, selected_month)
-        
-        # 요일 헤더
-        cols = st.columns(7)
-        days_kor = ["월", "화", "수", "목", "금", "토", "일"]
-        for i, d_name in enumerate(days_kor):
-            cols[i].markdown(f"<p style='text-align: center; font-weight: bold;'>{d_name}</p>", unsafe_allow_html=True)
-
-        # 날짜 버튼 렌더링
-        for week in cal_matrix:
-            w_cols = st.columns(7)
-            for i, day in enumerate(week):
-                if day == 0:
-                    w_cols[i].write("")
-                else:
-                    current_d = date(selected_year, selected_month, day)
-                    # 해당 날짜에 등록된 일정 개수 확인
-                    day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
-                    btn_label = f"{day}"
-                    if day_tasks:
-                        btn_label += f" ({len(day_tasks)})"
-                    
-                    if w_cols[i].button(btn_label, key=f"day_{selected_year}_{selected_month}_{day}"):
-                        st.session_state['selected_date'] = current_d
-
-        st.markdown(f"**선택된 날짜:** {st.session_state['selected_date']}")
-        
-        st.markdown("---")
-        st.markdown(f"#### 📝 {st.session_state['selected_date']} 당일 업무 및 완료 처리")
-        
-        # 선택된 날짜의 업무 목록 필터링
+        st.markdown(f"### 📌 선택한 날짜: {st.session_state['selected_date']} 업무 현황")
         target_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]
         
         if not target_tasks:
-            st.info("선택된 날자에 등록된 업무가 없습니다. 우측에서 일정을 등록해 주세요.")
+            st.info("선택된 날짜에 등록된 업무가 없습니다. 우측에서 일정을 등록해 보세요.")
         else:
-            for idx, task in enumerate(st.session_state['tasks']):
+            for task in st.session_state['tasks']:
                 if str(task['date']) == str(st.session_state['selected_date']):
-                    cols_t = st.columns([0.1, 0.7, 0.2])
-                    
-                    # 완료 체크박스
-                    is_checked = cols_t[0].checkbox("", value=task['completed'], key=f"chk_{task['id']}")
-                    if is_checked != task['completed']:
-                        task['completed'] = is_checked
-                        if is_checked:
-                            task['completed_date'] = str(date.today())
+                    with st.container(border=True):
+                        cols_t = st.columns([0.15, 0.85])
+                        is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
+                        
+                        if is_checked != task['completed']:
+                            task['completed'] = is_checked
+                            task['completed_date'] = str(date.today()) if is_checked else None
+                            st.rerun()
+                        
+                        if task['completed']:
+                            cols_t[1].markdown(f"<span style='color: gray; text-decoration: line-through; font-size: 16px; font-weight: bold;'>{task['title']}</span><br><span style='color:gray; font-size:12px;'>카테고리: {task['category']} | 요청자: {task['requester']} | 마감: {task['deadline']}</span><br><small style='color:green;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>", unsafe_allow_html=True)
                         else:
-                            task['completed_date'] = None
-                        st.rerun()
-                    
-                    # 업무 제목 표시 (완료 시 취소선 및 회색 처리)
-                    if task['completed']:
-                        cols_t[1].markdown(f"<span style='color: gray; text-decoration: line-through;'>{task['title']} [{task['category']}]</span><br><small style='color:gray;'>처리완료일: {task.get('completed_date', '-')}</small>", unsafe_allow_html=True)
-                    else:
-                        cols_t[1].markdown(f"<b>{task['title']}</b> <span style='font-size:12px; background:#e0f2fe; padding:2px 6px; border-radius:4px;'>{task['category']}</span><br><small>요청자: {task['requester']} | 마감: {task['deadline']}</small>", unsafe_allow_html=True)
+                            cols_t[1].markdown(f"<span style='font-size: 16px; font-weight: bold;'>{task['title']}</span> <span style='font-size:11px; background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:4px;'>{task['category']}</span><br><span style='font-size:13px; color:#475569;'>요청자: {task['requester']} | 마감기한: {task['deadline']}</span><br><p style='font-size:12px; margin-top:4px; color:#64748b;'>메모: {task['memo']}</p>", unsafe_allow_html=True)
 
     with col_right:
-        st.markdown("#### ➕ 신규 일정 등록 / 기록")
-        with st.form("task_form", clear_on_submit=True):
+        st.markdown("### ✍️ 신규 일정 등록")
+        with st.form("task_form_new", clear_on_submit=True):
             f_title = st.text_input("업무 제목")
-            f_date = st.date_input("일정 날짜", value=st.session_state['selected_date'])
+            f_date = st.date_input("일정 날짜 (달력 반영일)", value=st.session_state['selected_date'])
             f_deadline = st.date_input("마감 기한")
-            f_category = st.selectbox("카테고리 선택", ["고객제출", "업체접수", "자료작성"])
+            f_category = st.selectbox("카테고리", ["고객제출", "업체접수", "자료작성"])
             f_requester = st.text_input("요청자")
             f_memo = st.text_area("메모 및 상세 내용")
             
-            submitted = st.form_submit_button("일정 저장")
+            submitted = st.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
             if submitted:
                 if f_title.strip() == "":
                     st.warning("업무 제목을 입력해주세요.")
@@ -185,16 +196,13 @@ if menu == "업무 현황":
                         "completed_date": None
                     }
                     st.session_state['tasks'].append(new_task)
-                    st.success("일정이 성공적으로 저장되어 달력에 반영되었습니다!")
+                    st.success("일정이 성공적으로 저장되었습니다!")
                     st.rerun()
 
 elif menu == "필드 클레임 현황":
     st.subheader("생산 품목별 필드 클레임 누적 현황")
     st.markdown("구글 시트 원본 데이터 기반 자동 집계 분석 화면입니다.")
-    
-    chart_data = pd.DataFrame({
-        '클레임 발생 건수': [65, 42, 25, 10]
-    }, index=['쿨런트 펌프 (K3)', '워터 펌프 (Cee\'d)', '쿨런트 펌프 (쏘렌토)', '기타 부품'])
+    chart_data = pd.DataFrame({'클레임 발생 건수': [65, 42, 25, 10]}, index=['쿨런트 펌프 (K3)', '워터 펌프 (Cee\'d)', '쿨런트 펌프 (쏘렌토)', '기타 부품'])
     st.bar_chart(chart_data)
 
 elif menu == "개선 활동 관리":
@@ -211,11 +219,7 @@ elif menu == "개선 활동 관리":
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 분석")
     st.info("현대, 모비스, 현대위아, 글로비스 원본 시트 자동 취합 및 환율/분담율 계산 결과가 여기에 표시됩니다.")
-    
-    cost_data = {
-        "고객사": ["현대 / 글로비스", "현대위아", "모비스"],
-        "합산/청구 비용": ["₩ 18,450,000", "₩ 12,300,000", "₩ 11,830,000"]
-    }
+    cost_data = {"고객사": ["현대 / 글로비스", "현대위아", "모비스"], "합산/청구 비용": ["₩ 18,450,000", "₩ 12,300,000", "₩ 11,830,000"]}
     st.dataframe(pd.DataFrame(cost_data), use_container_width=True)
 
 elif menu == "구글 시트 연동 설정":
