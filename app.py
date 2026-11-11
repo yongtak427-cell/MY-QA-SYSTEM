@@ -233,14 +233,23 @@ elif menu == "필드 클레임 현황":
         st.markdown("<br>", unsafe_allow_html=True)
         load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
 
+    # 안전한 데이터 적재 및 컬럼명 자동 보정 함수 정의
+    def process_raw_dataframe(df_raw):
+        # 1. '현상명' 컬럼 자동 지정 (64번째 열이 존재하면 '현상명'으로 이름 변경, 단 이미 있으면 패스)
+        if '현상명' not in df_raw.columns and len(df_raw.columns) > 63:
+            df_raw = df_raw.rename(columns={df_raw.columns[63]: '현상명'})
+        
+        # 2. '현상상세' 컬럼 자동 지정 (60번째 열이 존재하면 '현상상세'로 이름 변경)
+        if '현상상세' not in df_raw.columns and len(df_raw.columns) > 59:
+            df_raw = df_raw.rename(columns={df_raw.columns[59]: '현상상세'})
+            
+        return df_raw
+
     if uploaded_file is not None:
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
             try:
                 raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, sheet_name=0)
-                if len(raw_df.columns) > 63:
-                    raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
-                if len(raw_df.columns) > 59:
-                    raw_df.rename(columns={raw_df.columns[59]: '현상상세'}, inplace=True)
+                raw_df = process_raw_dataframe(raw_df)
                 st.session_state['claim_df'] = raw_df
                 st.session_state['uploaded_file_name'] = uploaded_file.name
             except Exception as e:
@@ -251,10 +260,7 @@ elif menu == "필드 클레임 현황":
             sheet_url = st.session_state['gsheet_url']
             export_url = sheet_url.split('/edit')[0] + '/export?format=csv' if "edit" in sheet_url else sheet_url
             raw_df = pd.read_csv(export_url)
-            if len(raw_df.columns) > 63:
-                raw_df.rename(columns={raw_df.columns[63]: '현상명'}, inplace=True)
-            if len(raw_df.columns) > 59:
-                raw_df.rename(columns={raw_df.columns[59]: '현상상세'}, inplace=True)
+            raw_df = process_raw_dataframe(raw_df)
             st.session_state['claim_df'] = raw_df
             st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
             st.rerun()
@@ -300,9 +306,9 @@ elif menu == "필드 클레임 현황":
 
         # 필터링 적용 로직
         filtered_df = df.copy()
-        if selected_part_nos: filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
-        if selected_part_names: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
-        if selected_cars: filtered_df = filtered_df[filtered_df['차종'].astype(str).isin(selected_cars)]
+        if selected_part_nos and '품번' in filtered_df.columns: filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
+        if selected_part_names and '부품명' in filtered_df.columns: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
+        if selected_cars and '차종' in filtered_df.columns: filtered_df = filtered_df[filtered_df['차종'].astype(str).isin(selected_cars)]
         
         if selected_phen_names and '현상명' in filtered_df.columns:
             phen_mask = pd.Series(False, index=filtered_df.index)
@@ -313,12 +319,12 @@ elif menu == "필드 클레임 현황":
         if selected_phen_details and '현상상세' in filtered_df.columns: 
             filtered_df = filtered_df[filtered_df['현상상세'].astype(str).isin(selected_phen_details)]
 
-        if selected_prod_months: filtered_df = filtered_df[filtered_df['생산월'].astype(str).isin(selected_prod_months)]
+        if selected_prod_months and '생산월' in filtered_df.columns: filtered_df = filtered_df[filtered_df['생산월'].astype(str).isin(selected_prod_months)]
         if selected_sales_months and '판매월' in filtered_df.columns: filtered_df = filtered_df[filtered_df['판매월'].astype(str).isin(selected_sales_months)]
-        if selected_repair_months: filtered_df = filtered_df[filtered_df['수리월'].astype(str).isin(selected_repair_months)]
-        if selected_vins: filtered_df = filtered_df[filtered_df['VIN'].astype(str).isin(selected_vins)]
-        if selected_countries: filtered_df = filtered_df[filtered_df['판매국가'].astype(str).isin(selected_countries)]
-        if selected_plants: filtered_df = filtered_df[filtered_df['공장'].astype(str).isin(selected_plants)]
+        if selected_repair_months and '수리월' in filtered_df.columns: filtered_df = filtered_df[filtered_df['수리월'].astype(str).isin(selected_repair_months)]
+        if selected_vins and 'VIN' in filtered_df.columns: filtered_df = filtered_df[filtered_df['VIN'].astype(str).isin(selected_vins)]
+        if selected_countries and '판매국가' in filtered_df.columns: filtered_df = filtered_df[filtered_df['판매국가'].astype(str).isin(selected_countries)]
+        if selected_plants and '공장' in filtered_df.columns: filtered_df = filtered_df[filtered_df['공장'].astype(str).isin(selected_plants)]
 
         if selected_usages and '사용개월' in filtered_df.columns:
             usage_mask = pd.Series(False, index=filtered_df.index)
@@ -389,10 +395,8 @@ elif menu == "필드 클레임 현황":
                 return
             
             if custom_order is not None:
-                # 사용자가 지정한 순서대로 정렬 (작은 것부터 아래에 오게 하려면 reindex 후 뒤집거나 자바스크립트/Plotly categoryorder 활용)
                 data_series = data_series.reindex(custom_order).fillna(0)
                 y_vals = [str(i) for i in data_series.index]
-                # Plotly 수평 막대에서 맨 아래에 첫 번째 항목이 오게 하려면 순서를 그대로 유지하되 categoryorder 설정
             else:
                 data_series = data_series.sort_values(ascending=True)
                 y_vals = [str(i) for i in data_series.index]
@@ -406,7 +410,6 @@ elif menu == "필드 클레임 현황":
                 marker=dict(color='#3b82f6')
             ))
             
-            # yaxis categoryorder를 'array'로 주어 지정된 순서(작은 것 -> 큰 것 순으로 아래에서 위로)가 정확히 유지되도록 설정
             fig.update_layout(
                 title=title_text,
                 template="plotly_dark",
@@ -428,20 +431,18 @@ elif menu == "필드 클레임 현황":
                 noise_count = filtered_df['현상명'].astype(str).str.contains("소음|이음", case=False, na=False).sum()
                 other_count = len(filtered_df) - (leak_count + noise_count)
                 phen_summary = pd.Series({"누수": leak_count, "소음": noise_count, "기타": max(0, other_count)})
-                # 현상명은 일반 오름차순 정렬
                 plot_horizontal_bar(phen_summary.sort_values(ascending=True), "", height=300)
             else:
-                st.info("데이터 없음")
+                st.info("데이터에 '현상명' 컬럼이 존재하지 않습니다.")
 
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
                 mile_grouped = filtered_df.groupby('주행거리_구간', observed=False).size()
-                # 요청하신 순서: ~5000(또는 5000)부터 100000이상까지 점점 커지는 순서로 고정
                 mile_order = ['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상']
                 plot_horizontal_bar(mile_grouped, "", height=350, custom_order=mile_order)
             else:
-                st.info("데이터 없음")
+                st.info("데이터에 '주행거리Km' 컬럼이 존재하지 않습니다.")
 
         with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
@@ -453,17 +454,16 @@ elif menu == "필드 클레임 현황":
                 temp_df['사용개월_구간'] = pd.cut(temp_df['사용개월'], bins=bins, labels=labels)
                 usage_grouped = temp_df.groupby('사용개월_구간', observed=False).size()
                 
-                # 요청하신 순서: 3개월부터 60개월 이상까지 점점 커지는 순서로 고정
                 plot_horizontal_bar(usage_grouped, "", height=380, custom_order=labels)
             else:
-                st.info("데이터 없음")
+                st.info("데이터에 '사용개월' 컬럼이 존재하지 않습니다.")
 
             st.markdown("##### 📊 차종별 클레임 현황 (상위 항목)")
             if '차종' in filtered_df.columns:
                 car_grouped = filtered_df.groupby('차종').size().nlargest(15).sort_values(ascending=True)
                 plot_horizontal_bar(car_grouped, "", height=380)
             else:
-                st.info("데이터 없음")
+                st.info("데이터에 '차종' 컬럼이 존재하지 않습니다.")
 
         st.markdown("---")
         st.markdown(f"##### 📋 선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
