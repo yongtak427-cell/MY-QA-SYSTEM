@@ -81,7 +81,6 @@ menu = st.sidebar.radio(
 if menu == "업무 현황":
     st.subheader("📋 월별 캘린더 및 업무 일정 관리")
     
-    # 상단 달력 이동 컨트롤러
     col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
     with col_m1:
         if st.button("◀ 이전 달", use_container_width=True):
@@ -299,10 +298,8 @@ if menu == "업무 현황":
 
 elif menu == "필드 클레임 현황":
     st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
-    st.markdown("첨부된 엑셀 파일 또는 업로드된 데이터를 기반으로 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
+    st.markdown("클레임 RAW DATA 엑셀 파일을 업로드하여 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
 
-    # 1. 파일 자동 감지 또는 업로드
-    default_files = [f for f in os.listdir('.') if f.endswith('.xlsx') or f.endswith('.csv')]
     uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
 
     @st.cache_data
@@ -322,92 +319,126 @@ elif menu == "필드 클레임 현황":
 
     if uploaded_file is not None:
         df = load_claim_data(uploaded_file)
-    elif default_files:
-        # 현재 폴더에 있는 첨부 엑셀 파일 자동 로드
-        target_file = [f for f in default_files if "RO LIST" in f or "생산" in f]
-        df = load_claim_data(target_file[0] if target_file else default_files[0])
     else:
         df = pd.DataFrame()
 
     if not df.empty:
         st.markdown("---")
-        st.markdown("#### 🔍 조회 조건 필터 (차종, 품번, 부품명, 현상코드, 현상명, 생산월, 판매월, 수리월, 사용개월, 주행거리, 판매국가, VIN, 공장 등)")
+        st.markdown("#### 🔍 클레임 조회")
 
-        # 필터 UI 배치 (4열)
+        # 필터 UI 배치 (4열) - multiselect로 다중 선택 가능하도록 변경
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
 
         with f_col1:
-            car_types = ["전체"] + sorted(list(df['차종'].dropna().unique())) if '차종' in df.columns else ["전체"]
-            selected_car = st.selectbox("차종", car_types)
+            car_types = sorted(list(df['차종'].dropna().unique())) if '차종' in df.columns else []
+            selected_cars = st.multiselect("차종 (다중 선택 가능)", car_types)
 
-            part_nos = ["전체"] + sorted(list(df['품번'].dropna().unique())) if '품번' in df.columns else ["전체"]
-            selected_part_no = st.selectbox("품번", part_nos)
+            part_nos = sorted(list(df['품번'].dropna().unique())) if '품번' in df.columns else []
+            selected_part_nos = st.multiselect("품번 (다중 선택 가능)", part_nos)
 
-            part_names = ["전체"] + sorted(list(df['부품명'].dropna().unique())) if '부품명' in df.columns else ["전체"]
-            selected_part_name = st.selectbox("부품명", part_names)
+            part_names = sorted(list(df['부품명'].dropna().unique())) if '부품명' in df.columns else []
+            selected_part_names = st.multiselect("부품명 (다중 선택 가능)", part_names)
 
         with f_col2:
-            phen_codes = ["전체"] + sorted(list(df['현상코드'].dropna().unique())) if '현상코드' in df.columns else ["전체"]
-            selected_phen_code = st.selectbox("현상코드", phen_codes)
+            phen_codes = sorted(list(df['현상코드'].dropna().unique())) if '현상코드' in df.columns else []
+            selected_phen_codes = st.multiselect("현상코드 (다중 선택 가능)", phen_codes)
 
-            phen_names = ["전체"] + sorted(list(df['현상명'].dropna().unique())) if '현상명' in df.columns else ["전체"]
-            selected_phen_name = st.selectbox("현상명", phen_names)
+            phen_names = sorted(list(df['현상명'].dropna().unique())) if '현상명' in df.columns else []
+            selected_phen_names = st.multiselect("현상명 (다중 선택 가능)", phen_names)
 
-            countries = ["전체"] + sorted(list(df['판매국가'].dropna().unique())) if '판매국가' in df.columns else ["전체"]
-            selected_country = st.selectbox("판매국가", countries)
+            countries = sorted(list(df['판매국가'].dropna().unique())) if '판매국가' in df.columns else []
+            selected_countries = st.multiselect("판매국가 (다중 선택 가능)", countries)
 
         with f_col3:
-            plants = ["전체"] + sorted(list(df['공장'].dropna().unique())) if '공장' in df.columns else ["전체"]
-            selected_plant = st.selectbox("공장", plants)
+            plants = sorted(list(df['공장'].dropna().unique())) if '공장' in df.columns else []
+            selected_plants = st.multiselect("공장 (다중 선택 가능)", plants)
 
-            vins = ["전체"] + sorted(list(df['VIN'].dropna().unique())) if 'VIN' in df.columns else ["전체"]
-            selected_vin = st.selectbox("VIN", vins)
+            vins = sorted(list(df['VIN'].dropna().unique())) if 'VIN' in df.columns else []
+            selected_vins = st.multiselect("VIN (다중 선택 가능)", vins)
 
-            # AY~BL 추가 항목 필터 예시 (수리월 / 생산월 등)
-            repair_months = ["전체"] + sorted(list(df['수리월'].dropna().unique())) if '수리월' in df.columns else ["전체"]
-            selected_repair_month = st.selectbox("수리월", repair_months)
+            repair_months = sorted(list(df['수리월'].dropna().unique())) if '수리월' in df.columns else []
+            selected_repair_months = st.multiselect("수리월 (다중 선택 가능)", repair_months)
 
         with f_col4:
-            prod_months = ["전체"] + sorted(list(df['생산월'].dropna().unique())) if '생산월' in df.columns else ["전체"]
-            selected_prod_month = st.selectbox("생산월", prod_months)
+            prod_months = sorted(list(df['생산월'].dropna().unique())) if '생산월' in df.columns else []
+            selected_prod_months = st.multiselect("생산월 (다중 선택 가능)", prod_months)
 
-            # 사용개월 / 주행거리 슬라이더 필터
-            max_usage = int(df['사용개월'].max()) if '사용개월' in df.columns and not df['사용개월'].isnull().all() else 60
-            selected_usage = st.slider("사용개월 최대값", 0, max_usage if max_usage > 0 else 60, max_usage if max_usage > 0 else 60)
+            # 사용개월 구간 선택 (3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120)
+            usage_options = [3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120]
+            selected_usages = st.multiselect("사용개월 선택 (다중 선택 가능)", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월")
 
-            max_mile = int(df['주행거리Km'].max()) if '주행거리Km' in df.columns and not df['주행거리Km'].isnull().all() else 100000
-            selected_mile = st.slider("주행거리(Km) 최대값", 0, max_mile if max_mile > 0 else 100000, max_mile if max_mile > 0 else 100000)
+            # 주행거리 구간 선택 (5000, 10000, 30000, 50000, 70000, 100000, 100000이상)
+            mile_options = [5000, 10000, 30000, 50000, 70000, 100000, 999999]
+            selected_miles = st.multiselect(
+                "주행거리 구간 선택 (다중 선택 가능)", 
+                mile_options, 
+                format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하" if x==5000 else f"{x:,} 이하"
+            )
 
-        # 필터링 적용
+        # 필터링 적용 로직
         filtered_df = df.copy()
-        if selected_car != "전체":
-            filtered_df = filtered_df[filtered_df['차종'] == selected_car]
-        if selected_part_no != "전체":
-            filtered_df = filtered_df[filtered_df['품번'] == selected_part_no]
-        if selected_part_name != "전체":
-            filtered_df = filtered_df[filtered_df['부품명'] == selected_part_name]
-        if selected_phen_code != "전체":
-            filtered_df = filtered_df[filtered_df['현상코드'] == selected_phen_code]
-        if selected_phen_name != "전체":
-            filtered_df = filtered_df[filtered_df['현상명'] == selected_phen_name]
-        if selected_country != "전체":
-            filtered_df = filtered_df[filtered_df['판매국가'] == selected_country]
-        if selected_plant != "전체":
-            filtered_df = filtered_df[filtered_df['공장'] == selected_plant]
-        if selected_vin != "전체":
-            filtered_df = filtered_df[filtered_df['VIN'] == selected_vin]
-        if selected_repair_month != "전체":
-            filtered_df = filtered_df[filtered_df['수리월'] == selected_repair_month]
-        if selected_prod_month != "전체":
-            filtered_df = filtered_df[filtered_df['생산월'] == selected_prod_month]
-        if '사용개월' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['사용개월'] <= selected_usage]
-        if '주행거리Km' in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df['주행거리Km'] <= selected_mile]
+        if selected_cars:
+            filtered_df = filtered_df[filtered_df['차종'].isin(selected_cars)]
+        if selected_part_nos:
+            filtered_df = filtered_df[filtered_df['품번'].isin(selected_part_nos)]
+        if selected_part_names:
+            filtered_df = filtered_df[filtered_df['부품명'].isin(selected_part_names)]
+        if selected_phen_codes:
+            filtered_df = filtered_df[filtered_df['현상코드'].isin(selected_phen_codes)]
+        if selected_phen_names:
+            filtered_df = filtered_df[filtered_df['현상명'].isin(selected_phen_names)]
+        if selected_countries:
+            filtered_df = filtered_df[filtered_df['판매국가'].isin(selected_countries)]
+        if selected_plants:
+            filtered_df = filtered_df[filtered_df['공장'].isin(selected_plants)]
+        if selected_vins:
+            filtered_df = filtered_df[filtered_df['VIN'].isin(selected_vins)]
+        if selected_repair_months:
+            filtered_df = filtered_df[filtered_df['수리월'].isin(selected_repair_months)]
+        if selected_prod_months:
+            filtered_df = filtered_df[filtered_df['생산월'].isin(selected_prod_months)]
+
+        # 사용개월 구간 필터링 (예: 3개월 -> 0~3, 6개월 -> 4~6, 9개월 -> 7~9 등)
+        if selected_usages and '사용개월' in filtered_df.columns:
+            usage_mask = pd.Series(False, index=filtered_df.index)
+            for u in selected_usages:
+                if u == 3:
+                    usage_mask |= (filtered_df['사용개월'] >= 0) & (filtered_df['사용개월'] <= 3)
+                elif u == 6:
+                    usage_mask |= (filtered_df['사용개월'] >= 4) & (filtered_df['사용개월'] <= 6)
+                elif u == 9:
+                    usage_mask |= (filtered_df['사용개월'] >= 7) & (filtered_df['사용개월'] <= 9)
+                elif u == 12:
+                    usage_mask |= (filtered_df['사용개월'] >= 10) & (filtered_df['사용개월'] <= 12)
+                else:
+                    # 그 외 (24, 36 등은 이전 구간 초과 ~ 해당 값)
+                    prev_u = u - 12 if u > 12 else 12
+                    usage_mask |= (filtered_df['사용개월'] > prev_u) & (filtered_df['사용개월'] <= u)
+            filtered_df = filtered_df[usage_mask]
+
+        # 주행거리 구간 필터링 (5000: 0~5000, 10000: 5001~10000, 등)
+        if selected_miles and '주행거리Km' in filtered_df.columns:
+            mile_mask = pd.Series(False, index=filtered_df.index)
+            for m in selected_miles:
+                if m == 5000:
+                    mile_mask |= (filtered_df['주행거리Km'] >= 0) & (filtered_df['주행거리Km'] <= 5000)
+                elif m == 10000:
+                    mile_mask |= (filtered_df['주행거리Km'] > 5000) & (filtered_df['주행거리Km'] <= 10000)
+                elif m == 30000:
+                    mile_mask |= (filtered_df['주행거리Km'] > 10000) & (filtered_df['주행거리Km'] <= 30000)
+                elif m == 50000:
+                    mile_mask |= (filtered_df['주행거리Km'] > 30000) & (filtered_df['주행거리Km'] <= 50000)
+                elif m == 70000:
+                    mile_mask |= (filtered_df['주행거리Km'] > 50000) & (filtered_df['주행거리Km'] <= 70000)
+                elif m == 100000:
+                    mile_mask |= (filtered_df['주행거리Km'] > 70000) & (filtered_df['주행거리Km'] <= 100000)
+                elif m == 999999:
+                    mile_mask |= (filtered_df['주행거리Km'] > 100000)
+            filtered_df = filtered_df[mile_mask]
 
         st.markdown("---")
 
-        # 3. 상단: 꺾은선 그래프 (수리월 / 생산월 기준 추이 분석)
+        # 3. 상단: 꺾은선 그래프 (수리월 기준 추이 분석)
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (꺾은선 그래프)")
         if not filtered_df.empty and '수리월' in filtered_df.columns:
             trend_data = filtered_df.groupby('수리월').size().reset_index(name='클레임 건수')
@@ -434,8 +465,8 @@ elif menu == "필드 클레임 현황":
             if not filtered_df.empty and '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(
                     filtered_df['주행거리Km'], 
-                    bins=[0, 10000, 30000, 50000, 70000, 100000, 999999], 
-                    labels=['~10000', '~30000', '~50000', '~70000', '~100000', '100000~']
+                    bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], 
+                    labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상']
                 )
                 mile_chart = filtered_df.groupby('주행거리_구간', observed=False).size()
                 st.bar_chart(mile_chart)
@@ -461,7 +492,7 @@ elif menu == "필드 클레임 현황":
         st.markdown(f"##### 📋 선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
         st.dataframe(filtered_df, use_container_width=True)
     else:
-        st.warning("분석할 클레임 데이터 파일이 없습니다. 엑셀 파일을 업로드해 주세요.")
+        st.info("분석할 클레임 엑셀 파일을 업로드해 주세요.")
 
 elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
