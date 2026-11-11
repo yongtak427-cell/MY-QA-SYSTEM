@@ -43,7 +43,8 @@ if 'tasks' not in st.session_state:
             "requester": "현대위아 품질팀",
             "category": "고객제출",
             "completed": False,
-            "completed_date": None
+            "completed_date": None,
+            "updated_date": None
         },
         {
             "id": 2,
@@ -54,7 +55,8 @@ if 'tasks' not in st.session_state:
             "requester": "고객지원팀",
             "category": "자료작성",
             "completed": True,
-            "completed_date": str(date.today())
+            "completed_date": str(date.today()),
+            "updated_date": None
         }
     ]
 
@@ -64,6 +66,10 @@ if 'cal_month' not in st.session_state:
     st.session_state['cal_month'] = datetime.today().month
 if 'selected_date' not in st.session_state:
     st.session_state['selected_date'] = date.today()
+
+# 수정 모드 관리를 위한 세션 스테이트
+if 'editing_task_id' not in st.session_state:
+    st.session_state['editing_task_id'] = None
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
@@ -107,7 +113,7 @@ if menu == "업무 현황":
     selected_month = st.session_state['cal_month']
     cal_matrix = calendar.monthcalendar(selected_year, selected_month)
 
-    # 요일 헤더 (월~일) -> 요일 글씨 흰색, 일요일/토요일(공휴일) 빨간색
+    # 요일 헤더 (월~일)
     days_kor = ["월", "화", "수", "목", "금", "토", "일"]
     h_cols = st.columns(7)
     for i, d_name in enumerate(days_kor):
@@ -122,12 +128,9 @@ if menu == "업무 현황":
                 w_cols[i].markdown("<div style='height: 130px;'></div>", unsafe_allow_html=True)
             else:
                 current_d = date(selected_year, selected_month, day)
-                is_holiday = (selected_month, day) in holidays or i == 6  # 일요일 또는 법정 공휴일
-                
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 
                 with w_cols[i]:
-                    # 날짜 선택 버튼
                     btn_text = f"📌 {day}일" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
@@ -137,8 +140,6 @@ if menu == "업무 현황":
                     badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
-                        # 카테고리별 요청 색상 적용
-                        # 고객제출: 빨간색계열, 자료작성: 파란색계열, 업체접수: 노란색계열
                         if cat == '고객제출':
                             bg, fg = "#fee2e2", "#991b1b"
                         elif cat == '자료작성':
@@ -146,7 +147,6 @@ if menu == "업무 현황":
                         else: # 업체접수
                             bg, fg = "#fef08a", "#854d0e"
                             
-                        # 완료 여부에 따라 회색 처리
                         if t['completed']:
                             bg, fg = "#334155", "#94a3b8"
                             t_style = "text-decoration: line-through; color: #94a3b8;"
@@ -163,7 +163,7 @@ if menu == "업무 현황":
 
     st.markdown("---")
 
-    # 하단 분할: 좌측(당일 업무 및 완료 처리) / 우측(신규 일정 등록)
+    # 하단 분할: 좌측(당일 업무 및 완료 처리) / 우측(신규 일정 등록 및 수정 폼)
     col_left, col_right = st.columns(2)
 
     with col_left:
@@ -176,12 +176,17 @@ if menu == "업무 현황":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
 
-                cols_t = st.columns([0.2, 0.8])
+                cols_t = st.columns([0.15, 0.65, 0.2])
                 is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                 
                 if is_checked != task['completed']:
                     task['completed'] = is_checked
                     task['completed_date'] = str(date.today()) if is_checked else None
+                    st.rerun()
+
+                # 내용 수정 버튼
+                if cols_t[2].button("✏️ 수정", key=f"edit_btn_{task['id']}"):
+                    st.session_state['editing_task_id'] = task['id']
                     st.rerun()
 
                 cat = task['category']
@@ -192,11 +197,14 @@ if menu == "업무 현황":
                 else:
                     c_bg, c_fg = "#fef08a", "#854d0e"
 
+                # 수정일자 표기 (수정된 적이 있는 경우에만 카테고리 옆에 표시)
+                update_tag = f" | <span style='color: #f59e0b; font-size: 12px;'>수정일자 : {task['updated_date']}</span>" if task.get('updated_date') else ""
+
                 if task['completed']:
                     card_html = f"""
                         <div style='{box_style}'>
                             <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
-                            <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
+                            <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span>{update_tag}<br>
                             <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
                                 <b>요청자:</b> {task['requester']}<br>
                                 <b>마감기한:</b> {task['deadline']}<br>
@@ -209,7 +217,7 @@ if menu == "업무 현황":
                     card_html = f"""
                         <div style='{box_style}'>
                             <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
-                            <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
+                            <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span>{update_tag}<br>
                             <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
                                 <b>요청자:</b> {task['requester']}<br>
                                 <b>마감기한:</b> {task['deadline']}<br>
@@ -220,18 +228,50 @@ if menu == "업무 현황":
                 cols_t[1].markdown(card_html, unsafe_allow_html=True)
 
     with col_right:
-        st.markdown("### ✍️ 신규 일정 등록")
-        with st.form("task_form_new", clear_on_submit=True):
-            f_title = st.text_input("업무 제목")
-            f_date = st.date_input("일정 날짜 (달력 반영일)", value=st.session_state['selected_date'])
-            f_deadline = st.date_input("마감 기한")
-            f_category = st.selectbox("카테고리 선택", ["고객제출", "업체접수", "자료작성"])
-            f_requester = st.text_input("요청자")
-            f_memo = st.text_area("메모 및 상세 내용")
+        # 수정 모드인지 신규 등록 모드인지 확인
+        editing_task = None
+        if st.session_state['editing_task_id'] is not None:
+            for t in st.session_state['tasks']:
+                if t['id'] == st.session_state['editing_task_id']:
+                    editing_task = t
+                    break
+
+        if editing_task:
+            st.markdown(f"### ✏️ 기존 업무 내용 수정 (ID: {editing_task['id']})")
+            if st.button("❌ 수정 취소하기"):
+                st.session_state['editing_task_id'] = None
+                st.rerun()
+        else:
+            st.markdown("### ✍️ 신규 일정 등록")
+
+        # 폼 내부 기본값 설정 (수정 모드면 기존 데이터, 신규면 빈 값/오늘 날짜)
+        def_title = editing_task['title'] if editing_task else ""
+        def_date = editing_task['date'] if editing_task else st.session_state['selected_date']
+        def_deadline = editing_task['deadline'] if editing_task else date.today()
+        
+        categories = ["고객제출", "업체접수", "자료작성"]
+        def_cat_idx = categories.index(editing_task['category']) if editing_task and editing_task['category'] in categories else 0
+        
+        def_requester = editing_task['requester'] if editing_task else ""
+        def_memo = editing_task['memo'] if editing_task else ""
+
+        with st.form("task_manage_form"):
+            f_title = st.text_input("업무 제목", value=def_title)
+            f_date = st.date_input("일정 날짜 (달력 반영일)", value=def_date)
+            f_deadline = st.date_input("마감 기한", value=def_deadline)
+            f_category = st.selectbox("카테고리 선택", categories, index=def_cat_idx)
+            f_requester = st.text_input("요청자", value=def_requester)
+            f_memo = st.text_area("메모 및 상세 내용", value=def_memo)
             
-            submitted = st.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
-            if submitted:
-                if f_title.strip() == "":
+            # 버튼 영역 분할 (신규 등록 vs 내용 수정)
+            col_f1, col_f2 = st.columns(2)
+            submitted_new = col_f1.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
+            submitted_update = col_f2.form_submit_button("내용 수정/등록", use_container_width=True)
+
+            if submitted_new:
+                if editing_task:
+                    st.warning("현재 수정 모드입니다. 신규 등록은 '수정 취소하기' 후 진행해 주세요.")
+                elif f_title.strip() == "":
                     st.warning("업무 제목을 입력해주세요.")
                 else:
                     new_id = len(st.session_state['tasks']) + 1
@@ -244,10 +284,30 @@ if menu == "업무 현황":
                         "requester": f_requester,
                         "category": f_category,
                         "completed": False,
-                        "completed_date": None
+                        "completed_date": None,
+                        "updated_date": None
                     }
                     st.session_state['tasks'].append(new_task)
                     st.success("일정이 성공적으로 저장되었습니다!")
+                    st.rerun()
+
+            if submitted_update:
+                if not editing_task:
+                    st.warning("수정할 업무를 선택해주세요. (업무 카드 우측의 '수정' 버튼 클릭)")
+                elif f_title.strip() == "":
+                    st.warning("업무 제목을 입력해주세요.")
+                else:
+                    # 데이터 갱신 및 수정일자(오늘 날짜) 자동 기입
+                    editing_task['title'] = f_title
+                    editing_task['date'] = f_date
+                    editing_task['deadline'] = f_deadline
+                    editing_task['category'] = f_category
+                    editing_task['requester'] = f_requester
+                    editing_task['memo'] = f_memo
+                    editing_task['updated_date'] = datetime.today().strftime('%y-%m-%d')
+                    
+                    st.session_state['editing_task_id'] = None
+                    st.success("업무 내용이 성공적으로 수정되었습니다!")
                     st.rerun()
 
 elif menu == "필드 클레임 현황":
