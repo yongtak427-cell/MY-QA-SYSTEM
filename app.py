@@ -4,7 +4,7 @@ from datetime import datetime, date
 import calendar
 
 # 페이지 설정 (레이아웃 넓게 설정)
-st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
+st.set_page_config(page_title="TIKITAK Task Management", page_icon="🖥️", layout="wide")
 
 # CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
