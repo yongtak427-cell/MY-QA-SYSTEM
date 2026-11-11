@@ -121,7 +121,7 @@ if menu == "업무 현황":
         w_cols = st.columns(7)
         for i, day in enumerate(week):
             if day == 0:
-                w_cols[i].markdown("<div style='height: 130px;'></div>", unsafe_allow_html=True)
+                w_cols[i].markdown("<div style='height: 120px;'></div>", unsafe_allow_html=True)
             else:
                 current_d = date(selected_year, selected_month, day)
                 is_holiday = (selected_month, day) in holidays or i == 6  # 일요일 또는 법정 공휴일
@@ -129,11 +129,13 @@ if menu == "업무 현황":
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 
                 with w_cols[i]:
+                    # 날짜 선택 버튼 (클릭 시 해당 날짜로 이동 및 하이라이트 초기화)
                     btn_text = f"📌 {day}일" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
+                        st.rerun()
                     
-                    # 달력 칸 안에 카테고리를 2개씩 배치 형태로 표시 (클릭 시 하이라이트 토글)
+                    # 달력 칸 안에 카테고리 배지 깔끔하게 2열로 표시 (중복 제거 완료)
                     badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
@@ -156,11 +158,11 @@ if menu == "업무 현황":
                     if len(day_tasks) > 6:
                         badges_html += f"<div style='font-size:9px; color:gray; margin-top:2px;'>외 {len(day_tasks)-6}건</div>"
                         
-                    st.markdown(f"<div style='min-height:70px;'>{badges_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='min-height:60px;'>{badges_html}</div>", unsafe_allow_html=True)
                     
-                    # 달력 내 업무별 클릭 감지를 위한 투명 버튼들 배치
+                    # 각 카테고리 배지별 클릭 버튼 (아래 업무 현황에서 해당 건 테두리 강조 토글)
                     for t in day_tasks[:6]:
-                        if st.button(f"👉 {t['category']} ({t['title'][:4]}..)", key=f"click_task_{t['id']}"):
+                        if st.button(f"🔍 {t['category']} ({t['title'][:3]}..)", key=f"click_task_{t['id']}"):
                             st.session_state['selected_date'] = current_d
                             if st.session_state['highlighted_task_id'] == t['id']:
                                 st.session_state['highlighted_task_id'] = None
@@ -182,57 +184,58 @@ if menu == "업무 현황":
         else:
             for task in st.session_state['tasks']:
                 if str(task['date']) == str(st.session_state['selected_date']):
-                    # 선택된 항목일 경우 빨간 테두리 강조
+                    # 선택된 항목일 경우 전체 카드 테두리를 빨간색 계열로 강조
                     is_highlighted = (st.session_state['highlighted_task_id'] == task['id'])
-                    border_css = "border: 2.5px solid #ef4444; border-radius: 10px; padding: 12px; background-color: #1e293b; margin-bottom: 12px;" if is_highlighted else "border: 1px solid #334155; border-radius: 10px; padding: 12px; margin-bottom: 12px;"
+                    
+                    if is_highlighted:
+                        box_style = "border: 2.5px solid #ef4444; border-radius: 10px; padding: 15px; background-color: #1e293b; margin-bottom: 12px;"
+                    else:
+                        box_style = "border: 1px solid #334155; border-radius: 10px; padding: 15px; margin-bottom: 12px; background-color: #0e1117;"
 
-                    with st.container():
-                        st.markdown(f"<div style='{border_css}'>", unsafe_allow_html=True)
-                        cols_t = st.columns([0.2, 0.8])
-                        
-                        # 완료 버튼
-                        is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
-                        
-                        if is_checked != task['completed']:
-                            task['completed'] = is_checked
-                            task['completed_date'] = str(date.today()) if is_checked else None
-                            # 완료를 누르면 하이라이트 해제
-                            if is_checked and st.session_state['highlighted_task_id'] == task['id']:
-                                st.session_state['highlighted_task_id'] = None
-                            st.rerun()
-                        
-                        # 카테고리별 색상 지정
-                        cat = task['category']
-                        if cat == '고객제출':
-                            c_bg, c_fg = "#fee2e2", "#991b1b"
-                        elif cat == '자료작성':
-                            c_bg, c_fg = "#dcfce7", "#166534"
-                        else:
-                            c_bg, c_fg = "#dbeafe", "#1e40af"
+                    # HTML 카드로 전체 내용을 감싸서 깔끔하게 렌더링
+                    cat = task['category']
+                    if cat == '고객제출':
+                        c_bg, c_fg = "#fee2e2", "#991b1b"
+                    elif cat == '자료작성':
+                        c_bg, c_fg = "#dcfce7", "#166534"
+                    else:
+                        c_bg, c_fg = "#dbeafe", "#1e40af"
 
-                        # 완료 시 어두운 회색 처리, 미완료 시 흰색 글씨
-                        if task['completed']:
-                            cols_t[1].markdown(f"""
-                                <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
-                                <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
-                                    <b>요청자:</b> {task['requester']}<br>
-                                    <b>마감기한:</b> {task['deadline']}<br>
-                                    <b>메모 및 상세 내용:</b> {task['memo']}
-                                </div>
-                                <small style='color:#22c55e;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
-                            """, unsafe_allow_html=True)
-                        else:
-                            cols_t[1].markdown(f"""
-                                <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
-                                <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
-                                    <b>요청자:</b> {task['requester']}<br>
-                                    <b>마감기한:</b> {task['deadline']}<br>
-                                    <b>메모 및 상세 내용:</b> {task['memo']}
-                                </div>
-                            """, unsafe_allow_html=True)
-                        st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='{box_style}'>", unsafe_allow_html=True)
+                    
+                    cols_t = st.columns([0.2, 0.8])
+                    is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
+                    
+                    if is_checked != task['completed']:
+                        task['completed'] = is_checked
+                        task['completed_date'] = str(date.today()) if is_checked else None
+                        if is_checked and st.session_state['highlighted_task_id'] == task['id']:
+                            st.session_state['highlighted_task_id'] = None
+                        st.rerun()
+
+                    if task['completed']:
+                        cols_t[1].markdown(f"""
+                            <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
+                            <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
+                            <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
+                                <b>요청자:</b> {task['requester']}<br>
+                                <b>마감기한:</b> {task['deadline']}<br>
+                                <b>메모 및 상세 내용:</b> {task['memo']}
+                            </div>
+                            <small style='color:#22c55e;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
+                        """, unsafe_allow_html=True)
+                    else:
+                        cols_t[1].markdown(f"""
+                            <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
+                            <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
+                            <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
+                                <b>요청자:</b> {task['requester']}<br>
+                                <b>마감기한:</b> {task['deadline']}<br>
+                                <b>메모 및 상세 내용:</b> {task['memo']}
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                    st.markdown("</div>", unsafe_allow_html=True)
 
     with col_right:
         st.markdown("### ✍️ 신규 일정 등록")
