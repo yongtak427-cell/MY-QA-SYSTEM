@@ -346,7 +346,7 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 1. 상단 추이 분석 그래프
+        # 1. 상단 추이 분석 그래프 (Y축 0부터 시작 및 양쪽 축 스케일 동기화)
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 [좌측 축] & 수리월 빨간색 꺾은선 [우측 축])")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
@@ -367,8 +367,9 @@ elif menu == "필드 클레임 현황":
                     fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['수리건수'], name="수리월 클레임 (꺾은선)", line=dict(color="#ef4444", width=3), mode='lines+markers'), secondary_y=True)
 
                 fig.update_layout(template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", height=450, margin=dict(l=40, r=40, t=30, b=40), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                fig.update_yaxes(title_text="<b>생산건수 (좌측)</b>", secondary_y=False, showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
-                fig.update_yaxes(title_text="<b>수리건수 (우측)</b>", secondary_y=True, showgrid=False)
+                # Y축 시작점을 0으로 고정
+                fig.update_yaxes(title_text="<b>생산건수 (좌측)</b>", secondary_y=False, rangemode="tozero", showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
+                fig.update_yaxes(title_text="<b>수리건수 (우측)</b>", secondary_y=True, rangemode="tozero", showgrid=False)
                 fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
 
                 st.plotly_chart(fig, use_container_width=True)
@@ -379,25 +380,33 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석 (수평 막대 그래프)
+        # 2. 하단 다각도 분석 (수평 막대 그래프: Y축 작은 수치부터 위로 커지는 순서로 고정)
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
-        def plot_horizontal_bar(data_series, title_text, top_n=15, height=450):
+        def plot_horizontal_bar(data_series, title_text, height=450, custom_order=None):
             if data_series.empty:
                 st.info("데이터 없음")
                 return
-            if len(data_series) > top_n:
-                data_series = data_series.nlargest(top_n)
-            data_series = data_series.sort_values(ascending=True)
             
+            if custom_order is not None:
+                # 사용자가 지정한 순서대로 정렬 (작은 것부터 아래에 오게 하려면 reindex 후 뒤집거나 자바스크립트/Plotly categoryorder 활용)
+                data_series = data_series.reindex(custom_order).fillna(0)
+                y_vals = [str(i) for i in data_series.index]
+                # Plotly 수평 막대에서 맨 아래에 첫 번째 항목이 오게 하려면 순서를 그대로 유지하되 categoryorder 설정
+            else:
+                data_series = data_series.sort_values(ascending=True)
+                y_vals = [str(i) for i in data_series.index]
+
             fig = go.Figure(go.Bar(
                 x=data_series.values,
-                y=[str(i) for i in data_series.index],
+                y=y_vals,
                 orientation='h',
                 text=data_series.values,
                 textposition='auto',
                 marker=dict(color='#3b82f6')
             ))
+            
+            # yaxis categoryorder를 'array'로 주어 지정된 순서(작은 것 -> 큰 것 순으로 아래에서 위로)가 정확히 유지되도록 설정
             fig.update_layout(
                 title=title_text,
                 template="plotly_dark",
@@ -405,8 +414,8 @@ elif menu == "필드 클레임 현황":
                 plot_bgcolor="#0e1117",
                 height=height,
                 margin=dict(l=150, r=50, t=30, b=30),
-                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-                yaxis=dict(tickfont=dict(size=11), type='category')
+                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', rangemode='tozero'),
+                yaxis=dict(tickfont=dict(size=11), type='category', categoryorder='array', categoryarray=y_vals)
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -419,21 +428,24 @@ elif menu == "필드 클레임 현황":
                 noise_count = filtered_df['현상명'].astype(str).str.contains("소음|이음", case=False, na=False).sum()
                 other_count = len(filtered_df) - (leak_count + noise_count)
                 phen_summary = pd.Series({"누수": leak_count, "소음": noise_count, "기타": max(0, other_count)})
-                plot_horizontal_bar(phen_summary, "", top_n=3, height=300)
+                # 현상명은 일반 오름차순 정렬
+                plot_horizontal_bar(phen_summary.sort_values(ascending=True), "", height=300)
             else:
                 st.info("데이터 없음")
 
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
-                plot_horizontal_bar(filtered_df.groupby('주행거리_구간', observed=False).size(), "", top_n=10, height=350)
+                mile_grouped = filtered_df.groupby('주행거리_구간', observed=False).size()
+                # 요청하신 순서: ~5000(또는 5000)부터 100000이상까지 점점 커지는 순서로 고정
+                mile_order = ['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상']
+                plot_horizontal_bar(mile_grouped, "", height=350, custom_order=mile_order)
             else:
                 st.info("데이터 없음")
 
         with hb_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns:
-                # 요청하신 9개 기준으로 데이터 그룹화 및 정렬
                 bins = [-1, 3, 6, 9, 12, 24, 36, 48, 60, 999999]
                 labels = ['3개월 (0~3)', '6개월 (4~6)', '9개월 (7~9)', '12개월 (10~12)', '24개월 (13~24)', '36개월 (25~36)', '48개월 (37~48)', '60개월 (49~60)', '60개월 이상']
                 
@@ -441,15 +453,15 @@ elif menu == "필드 클레임 현황":
                 temp_df['사용개월_구간'] = pd.cut(temp_df['사용개월'], bins=bins, labels=labels)
                 usage_grouped = temp_df.groupby('사용개월_구간', observed=False).size()
                 
-                # 지정된 9개 순서대로 인덱스 정렬
-                usage_grouped = usage_grouped.reindex(labels).fillna(0)
-                plot_horizontal_bar(usage_grouped, "", top_n=9, height=380)
+                # 요청하신 순서: 3개월부터 60개월 이상까지 점점 커지는 순서로 고정
+                plot_horizontal_bar(usage_grouped, "", height=380, custom_order=labels)
             else:
                 st.info("데이터 없음")
 
             st.markdown("##### 📊 차종별 클레임 현황 (상위 항목)")
             if '차종' in filtered_df.columns:
-                plot_horizontal_bar(filtered_df.groupby('차종').size(), "", top_n=15, height=380)
+                car_grouped = filtered_df.groupby('차종').size().nlargest(15).sort_values(ascending=True)
+                plot_horizontal_bar(car_grouped, "", height=380)
             else:
                 st.info("데이터 없음")
 
