@@ -233,16 +233,12 @@ elif menu == "필드 클레임 현황":
         st.markdown("<br>", unsafe_allow_html=True)
         load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
 
-    # 안전한 데이터 적재 및 컬럼명 자동 보정 함수 정의
+    # BL열(인덱스 63번) 및 BH열(인덱스 59번)을 명확하게 '현상명', '현상상세'로 강제 매핑하는 전처리 함수
     def process_raw_dataframe(df_raw):
-        # 1. '현상명' 컬럼 자동 지정 (64번째 열이 존재하면 '현상명'으로 이름 변경, 단 이미 있으면 패스)
-        if '현상명' not in df_raw.columns and len(df_raw.columns) > 63:
-            df_raw = df_raw.rename(columns={df_raw.columns[63]: '현상명'})
-        
-        # 2. '현상상세' 컬럼 자동 지정 (60번째 열이 존재하면 '현상상세'로 이름 변경)
-        if '현상상세' not in df_raw.columns and len(df_raw.columns) > 59:
-            df_raw = df_raw.rename(columns={df_raw.columns[59]: '현상상세'})
-            
+        if len(df_raw.columns) > 63:
+            df_raw.rename(columns={df_raw.columns[63]: '현상명'}, inplace=True)
+        if len(df_raw.columns) > 59:
+            df_raw.rename(columns={df_raw.columns[59]: '현상상세'}, inplace=True)
         return df_raw
 
     if uploaded_file is not None:
@@ -279,6 +275,7 @@ elif menu == "필드 클레임 현황":
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
+        # 엑셀 BL열 기반 '현상명'은 '누수', '소음', '기타'만 선택 가능하도록 제한
         phenomenon_options = ["누수", "소음", "기타"]
 
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
