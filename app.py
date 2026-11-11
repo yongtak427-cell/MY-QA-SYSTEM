@@ -127,13 +127,13 @@ if menu == "업무 현황":
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 
                 with w_cols[i]:
-                    # 날짜 선택 버튼 (클릭 시 하단 '선택한 날짜 업무 현황'이 해당 날짜로 바뀜)
+                    # 날짜 선택 버튼
                     btn_text = f"📌 {day}일" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                         st.rerun()
                     
-                    # 달력 칸 안에 카테고리별 색상 배지 생성 (한 줄에 2개씩 배치하여 최대 6개 이상 수용)
+                    # 달력 칸 안에 카테고리별 색상 배지 생성 (한 줄에 2개씩 배치)
                     badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
@@ -173,31 +173,30 @@ if menu == "업무 현황":
         if not target_tasks:
             st.info("선택된 날짜에 등록된 업무가 없습니다. 우측에서 일정을 등록해 보세요.")
         else:
-            for task in st.session_state['tasks']:
-                if str(task['date']) == str(st.session_state['selected_date']):
-                    # 일반 카드 스타일 (깔끔한 다크 테두리)
-                    box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
+            for task in t_list := [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]:
+                # 불필요한 빈 컨테이너 테두리(가로바)를 없애고 순수 카드 HTML 구조로 깔끔하게 렌더링
+                box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
 
-                    st.markdown(f"<div style='{box_style}'>", unsafe_allow_html=True)
-                    
-                    cols_t = st.columns([0.2, 0.8])
-                    is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
-                    
-                    if is_checked != task['completed']:
-                        task['completed'] = is_checked
-                        task['completed_date'] = str(date.today()) if is_checked else None
-                        st.rerun()
+                # 체크박스와 내용을 포함하는 단일 HTML 블록 생성
+                cols_t = st.columns([0.2, 0.8])
+                is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
+                
+                if is_checked != task['completed']:
+                    task['completed'] = is_checked
+                    task['completed_date'] = str(date.today()) if is_checked else None
+                    st.rerun()
 
-                    cat = task['category']
-                    if cat == '고객제출':
-                        c_bg, c_fg = "#fee2e2", "#991b1b"
-                    elif cat == '자료작성':
-                        c_bg, c_fg = "#dbeafe", "#1e40af"
-                    else:
-                        c_bg, c_fg = "#fef08a", "#854d0e"
+                cat = task['category']
+                if cat == '고객제출':
+                    c_bg, c_fg = "#fee2e2", "#991b1b"
+                elif cat == '자료작성':
+                    c_bg, c_fg = "#dbeafe", "#1e40af"
+                else:
+                    c_bg, c_fg = "#fef08a", "#854d0e"
 
-                    if task['completed']:
-                        cols_t[1].markdown(f"""
+                if task['completed']:
+                    card_html = f"""
+                        <div style='{box_style}'>
                             <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
                             <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
                             <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
@@ -206,9 +205,11 @@ if menu == "업무 현황":
                                 <b>메모 및 상세 내용:</b> {task['memo']}
                             </div>
                             <small style='color:#22c55e;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
-                        """, unsafe_allow_html=True)
-                    else:
-                        cols_t[1].markdown(f"""
+                        </div>
+                    """
+                else:
+                    card_html = f"""
+                        <div style='{box_style}'>
                             <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
                             <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
                             <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
@@ -216,9 +217,9 @@ if menu == "업무 현황":
                                 <b>마감기한:</b> {task['deadline']}<br>
                                 <b>메모 및 상세 내용:</b> {task['memo']}
                             </div>
-                        """, unsafe_allow_html=True)
-                        
-                    st.markdown("</div>", unsafe_allow_html=True)
+                        </div>
+                    """
+                cols_t[1].markdown(card_html, unsafe_allow_html=True)
 
     with col_right:
         st.markdown("### ✍️ 신규 일정 등록")
