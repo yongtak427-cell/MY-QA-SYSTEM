@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 import os
+import matplotlib.pyplot as plt
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
@@ -324,76 +325,74 @@ elif menu == "필드 클레임 현황":
 
     if not df.empty:
         st.markdown("---")
-        st.markdown("#### 🔍 클레임 조회")
+        st.markdown("#### 🔍 클레임 조회 (직접 검색 및 다중 선택 가능)")
+
+        # 공통 검색 후 다중선택 헬퍼 함수
+        def search_and_multiselect(label, series):
+            unique_vals = sorted([str(x) for x in series.dropna().unique()])
+            # 1단계: 직접 검색어 입력
+            search_query = st.text_input(f"{label} 직접 검색", placeholder="검색어 입력...", key=f"search_{label}")
+            # 검색어에 맞는 목록 필터링
+            if search_query:
+                filtered_opts = [v for v in unique_vals if search_query.lower() in v.lower()]
+            else:
+                filtered_opts = unique_vals
+            # 2단계: 필터링된 결과 중 다중 선택
+            selected = st.multiselect(f"{label} (다중 선택 가능)", filtered_opts, key=f"multi_{label}")
+            return selected
 
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
 
         with f_col1:
-            car_types = sorted(list(df['차종'].dropna().unique())) if '차종' in df.columns else []
-            selected_cars = st.multiselect("차종 (다중 선택 가능)", car_types)
-
-            part_nos = sorted(list(df['품번'].dropna().unique())) if '품번' in df.columns else []
-            selected_part_nos = st.multiselect("품번 (다중 선택 가능)", part_nos)
-
-            part_names = sorted(list(df['부품명'].dropna().unique())) if '부품명' in df.columns else []
-            selected_part_names = st.multiselect("부품명 (다중 선택 가능)", part_names)
+            selected_cars = search_and_multiselect("차종", df['차종']) if '차종' in df.columns else []
+            selected_part_nos = search_and_multiselect("품번", df['품번']) if '품번' in df.columns else []
+            selected_part_names = search_and_multiselect("부품명", df['부품명']) if '부품명' in df.columns else []
 
         with f_col2:
-            phen_codes = sorted(list(df['현상코드'].dropna().unique())) if '현상코드' in df.columns else []
-            selected_phen_codes = st.multiselect("현상코드 (다중 선택 가능)", phen_codes)
-
-            phen_names = sorted(list(df['현상명'].dropna().unique())) if '현상명' in df.columns else []
-            selected_phen_names = st.multiselect("현상명 (다중 선택 가능)", phen_names)
-
-            countries = sorted(list(df['판매국가'].dropna().unique())) if '판매국가' in df.columns else []
-            selected_countries = st.multiselect("판매국가 (다중 선택 가능)", countries)
+            selected_phen_codes = search_and_multiselect("현상코드", df['현상코드']) if '현상코드' in df.columns else []
+            selected_phen_names = search_and_multiselect("현상명", df['현상명']) if '현상명' in df.columns else []
+            selected_countries = search_and_multiselect("판매국가", df['판매국가']) if '판매국가' in df.columns else []
 
         with f_col3:
-            plants = sorted(list(df['공장'].dropna().unique())) if '공장' in df.columns else []
-            selected_plants = st.multiselect("공장 (다중 선택 가능)", plants)
-
-            vins = sorted(list(df['VIN'].dropna().unique())) if 'VIN' in df.columns else []
-            selected_vins = st.multiselect("VIN (다중 선택 가능)", vins)
-
-            repair_months = sorted(list(df['수리월'].dropna().unique())) if '수리월' in df.columns else []
-            selected_repair_months = st.multiselect("수리월 (다중 선택 가능)", repair_months)
+            selected_plants = search_and_multiselect("공장", df['공장']) if '공장' in df.columns else []
+            selected_vins = search_and_multiselect("VIN", df['VIN']) if 'VIN' in df.columns else []
+            selected_repair_months = search_and_multiselect("수리월", df['수리월']) if '수리월' in df.columns else []
 
         with f_col4:
-            prod_months = sorted(list(df['생산월'].dropna().unique())) if '생산월' in df.columns else []
-            selected_prod_months = st.multiselect("생산월 (다중 선택 가능)", prod_months)
+            selected_prod_months = search_and_multiselect("생산월", df['생산월']) if '생산월' in df.columns else []
 
             usage_options = [3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120]
-            selected_usages = st.multiselect("사용개월 선택 (다중 선택 가능)", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월")
+            selected_usages = st.multiselect("사용개월 선택 (다중 선택)", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월")
 
             mile_options = [5000, 10000, 30000, 50000, 70000, 100000, 999999]
             selected_miles = st.multiselect(
-                "주행거리 구간 선택 (다중 선택 가능)", 
+                "주행거리 구간 선택 (다중 선택)", 
                 mile_options, 
                 format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하" if x==5000 else f"{x:,} 이하"
             )
 
-        # 필터링 적용 로직
+        # 필터링 적용 로직 (문자열 변환 비교로 안전하게 매칭)
         filtered_df = df.copy()
         if selected_cars:
-            filtered_df = filtered_df[filtered_df['차종'].isin(selected_cars)]
+            filtered_df = filtered_df[filtered_df['차종'].astype(str).isin(selected_cars)]
         if selected_part_nos:
-            filtered_df = filtered_df[filtered_df['품번'].isin(selected_part_nos)]
+            filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
         if selected_part_names:
-            filtered_df = filtered_df[filtered_df['부품명'].isin(selected_part_names)]
+            filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
         if selected_phen_codes:
-            filtered_df = filtered_df[filtered_df['현상코드'].isin(selected_phen_codes)]
+            filtered_df = filtered_df[filtered_df['현상코드'].astype(str).isin(selected_phen_codes)]
         if selected_phen_names:
-            filtered_df = filtered_df[filtered_df['현상명'].isin(selected_phen_names)]
+            filtered_df = filtered_df[filtered_df['현상명'].astype(str).isin(selected_phen_names)]
         if selected_countries:
-            filtered_df = filtered_df[filtered_df['판매국가'].isin(selected_countries)]
+            filtered_df = filtered_df[filtered_df['판매국가'].astype(str).isin(selected_countries)]
         if selected_plants:
-            filtered_df = filtered_df[filtered_df['공장'].isin(selected_plants)]
+            filtered_df = filtered_df[filtered_df['공장'].astype(str).isin(selected_plants)]
         if selected_vins:
-            filtered_df = filtered_df[filtered_df['VIN'].isin(selected_vins)]
+            filtered_df = filtered_df[filtered_df['VIN'].astype(str).isin(selected_vins)]
         if selected_repair_months:
-            filtered_df = filtered_df[filtered_df['수리월'].isin(selected_repair_months)]
+            filtered_df = filtered_df[filtered_df['수리월'].astype(str).isin(selected_repair_months)]
         if selected_prod_months:
-            filtered_df = filtered_df[filtered_df['생산월'].isin(selected_prod_months)]
+            filtered_df = filtered_df[filtered_df['생산월'].astype(str).isin(selected_prod_months)]
 
         if selected_usages and '사용개월' in filtered_df.columns:
             usage_mask = pd.Series(False, index=filtered_df.index)
@@ -432,8 +431,8 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 3. 상단: 클레임 추이 분석 (생산월 막대 + 수리월 꺾은선 통합 차트 - Streamlit 네이티브 활용)
-        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 막대 & 수리월 꺾은선)")
+        # 3. 상단: 클레임 추이 분석 (생산월 파란색 막대 + 수리월 빨간색 꺾은선 [동일 차트 통합 듀얼 축])
+        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 & 수리월 빨간색 꺾은선 통합)")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
             if '수리월' in filtered_df.columns:
@@ -446,12 +445,33 @@ elif menu == "필드 클레임 현황":
             chart_df = chart_df.fillna(0).sort_index()
 
             if not chart_df.empty:
-                # Streamlit 네이티브 바 차트 (생산월 막대 - 파란색 느낌) 및 라인 차트 분할 표기
-                st.bar_chart(chart_df[['생산건수 (막대)']], color="#3b82f6")
-                st.markdown("<p style='font-size:12px; color:gray;'>▲ 생산월 기준 클레임 분포 (막대)</p>", unsafe_allow_html=True)
-                
-                st.line_chart(chart_df[['수리건수 (꺾은선)']], color="#ef4444")
-                st.markdown("<p style='font-size:12px; color:gray;'>▲ 수리월 기준 클레임 추이 (빨간색 꺾은선)</p>", unsafe_allow_html=True)
+                fig, ax1 = plt.subplots(figsize=(14, 5))
+                fig.patch.set_facecolor('#0e1117')
+                ax1.set_facecolor('#0e1117')
+
+                # 생산월 막대 그래프 (파란색)
+                if '생산건수 (막대)' in chart_df.columns:
+                    ax1.bar(chart_df.index, chart_df['생산건수 (막대)'], color='#3b82f6', alpha=0.6, label='생산월 클레임 (막대)')
+
+                # 수리월 꺾은선 그래프 (빨간색 계열) - 동일 축 또는 듀얼 축
+                ax2 = ax1.twinx()
+                if '수리건수 (꺾은선)' in chart_df.columns:
+                    ax2.plot(chart_df.index, chart_df['수리건수 (꺾은선)'], color='#ef4444', marker='o', linewidth=2.5, label='수리월 클레임 (꺾은선)')
+
+                ax1.set_ylabel("생산건수", color='#3b82f6', fontsize=12)
+                ax2.set_ylabel("수리건수", color='#ef4444', fontsize=12)
+
+                ax1.tick_params(axis='x', rotation=90, colors='white')
+                ax1.tick_params(axis='y', colors='white')
+                ax2.tick_params(axis='y', colors='white')
+                ax1.spines['bottom'].set_color('gray')
+                ax1.spines['left'].set_color('gray')
+                ax2.spines['right'].set_color('gray')
+                ax1.spines['top'].set_visible(False)
+                ax2.spines['top'].set_visible(False)
+                ax1.grid(True, linestyle='--', alpha=0.2)
+
+                st.pyplot(fig)
             else:
                 st.info("시각화할 데이터가 없습니다.")
         else:
