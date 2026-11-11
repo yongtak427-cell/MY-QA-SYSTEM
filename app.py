@@ -3,18 +3,24 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 
-# 페이지 설정
-st.set_page_config(page_title="QA & 필드 클레임 통합 관리", page_icon="📊", layout="wide")
+# 페이지 설정 (레이아웃 넓게 설정)
+st.set_page_config(page_title="TIKITAK Task Management ", page_icon="🖥️", layout="wide")
 
-# 사이드바 메뉴 스타일 및 커스텀 CSS (완료 버튼 크기 키우기 등)
+# CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
     <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+        max-width: 100% !important;
+    }
     section[data-testid="stSidebar"] .stRadio label {
         font-size: 18px !important;
         font-weight: 600 !important;
         padding: 6px 0px;
     }
-    /* 완료 체크박스 글씨 및 크기 확대 */
     div.stCheckbox label p {
         font-size: 16px !important;
         font-weight: bold !important;
@@ -22,7 +28,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 품질보증 및 필드 클레임 통합 관리 대시보드")
+st.title(" Quality Assurance/Management")
 
 # 세션 스테이트 초기화
 if 'tasks' not in st.session_state:
@@ -59,7 +65,7 @@ if 'selected_date' not in st.session_state:
     st.session_state['selected_date'] = date.today()
 
 # 사이드바 메뉴
-st.sidebar.markdown("## 🧭 메뉴 목록")
+st.sidebar.markdown("## Menu List")
 menu = st.sidebar.radio(
     "메뉴 선택",
     ["업무 현황", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"],
@@ -125,7 +131,7 @@ if menu == "업무 현황":
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                     
-                    # 달력 칸 안에 카테고리 및 업무 내용 표시 (최대 6개)
+                    # 달력 칸 안에는 오직 카테고리 내용만 표시 (최대 6개)
                     task_preview = ""
                     for t in day_tasks[:6]:
                         cat = t['category']
@@ -137,20 +143,19 @@ if menu == "업무 현황":
                         else: # 업체접수
                             bg, fg = "#dbeafe", "#1e40af"
                             
-                        # 완료 여부에 따라 회색 처리
+                        # 완료 여부에 따라 달력 내 카테고리도 회색 처리
                         if t['completed']:
-                            bg, fg = "#e2e8f0", "#64748b"
-                            t_title_style = "text-decoration: line-through; color: #64748b;"
+                            bg, fg = "#334155", "#94a3b8"
+                            t_style = "text-decoration: line-through; color: #94a3b8;"
                         else:
-                            t_title_style = f"color: {fg};"
+                            t_style = f"color: {fg};"
 
-                        short_title = (t['title'][:7] + '..') if len(t['title']) > 7 else t['title']
-                        task_preview += f"<div style='font-size:10px; background:{bg}; color:{fg}; padding:1px 3px; margin-bottom:2px; border-radius:3px; overflow:hidden; white-space:nowrap;'><b style='{t_title_style}'>[{cat}] {short_title}</b></div>"
+                        task_preview += f"<div style='font-size:11px; background:{bg}; color:{fg}; padding:2px 4px; margin-bottom:2px; border-radius:3px; text-align:center;'><b style='{t_style}'>{cat}</b></div>"
                     
                     if len(day_tasks) > 6:
-                        task_preview += f"<div style='font-size:9px; color:gray;'>외 {len(day_tasks)-6}건</div>"
+                        task_preview += f"<div style='font-size:9px; color:gray; text-align:center;'>외 {len(day_tasks)-6}건</div>"
                         
-                    st.markdown(f"<div style='min-height:70px; font-size:11px;'>{task_preview}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='min-height:70px;'>{task_preview}</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -169,8 +174,8 @@ if menu == "업무 현황":
                     with st.container(border=True):
                         cols_t = st.columns([0.2, 0.8])
                         
-                        # 완료 버튼 (체크박스 크기 및 스타일 확대)
-                        is_checked = cols_t[0].checkbox("✅ 완료", value=task['completed'], key=f"chk_{task['id']}")
+                        # 완료 버튼
+                        is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                         
                         if is_checked != task['completed']:
                             task['completed'] = is_checked
@@ -186,23 +191,23 @@ if menu == "업무 현황":
                         else:
                             c_bg, c_fg = "#dbeafe", "#1e40af"
 
-                        # 요청자 -> 마감기한 -> 메모 및 상세 내용 순으로 아래로 나열 (글씨 크기 확대)
+                        # 완료 시 어두운 회색 처리, 미완료 시 흰색 글씨
                         if task['completed']:
                             cols_t[1].markdown(f"""
-                                <span style='color: gray; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
-                                <span style='font-size:12px; background:#e2e8f0; color:#64748b; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #475569; margin-top: 6px;'>
+                                <span style='color: #94a3b8; text-decoration: line-through; font-size: 18px; font-weight: bold;'>{task['title']}</span> 
+                                <span style='font-size:12px; background:#334155; color:#94a3b8; padding:2px 6px; border-radius:4px;'>{cat}</span><br>
+                                <div style='font-size: 14px; color: #94a3b8; margin-top: 6px;'>
                                     <b>요청자:</b> {task['requester']}<br>
                                     <b>마감기한:</b> {task['deadline']}<br>
                                     <b>메모 및 상세 내용:</b> {task['memo']}
                                 </div>
-                                <small style='color:green;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
+                                <small style='color:#22c55e;'><b>[처리완료일: {task.get('completed_date', '-')}]</b></small>
                             """, unsafe_allow_html=True)
                         else:
                             cols_t[1].markdown(f"""
-                                <span style='font-size: 18px; font-weight: bold;'>{task['title']}</span> 
+                                <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
                                 <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span><br>
-                                <div style='font-size: 14px; color: #1e293b; margin-top: 6px; line-height: 1.5;'>
+                                <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
                                     <b>요청자:</b> {task['requester']}<br>
                                     <b>마감기한:</b> {task['deadline']}<br>
                                     <b>메모 및 상세 내용:</b> {task['memo']}
@@ -265,7 +270,4 @@ elif menu == "고객사 클레임 비용 분석":
 
 elif menu == "구글 시트 연동 설정":
     st.subheader("구글 드라이브 & 스프레드시트 연동")
-    st.text_input("필드 클레임 현황 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
-    st.text_input("고객사 클레임 비용 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
-    if st.button("연동 정보 저장"):
-        st.success("구글 클라우드 스프레드시트와 성공적으로 연동되었습니다!")
+    st.text_input("필드 클레임 현황 구글 시트 URL", "https
