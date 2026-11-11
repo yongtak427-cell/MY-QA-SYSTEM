@@ -432,48 +432,26 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 3. 상단: 클레임 추이 분석 (생산월 파란색 막대 + 수리월 빨간색 꺾은선 통합 차트)
+        # 3. 상단: 클레임 추이 분석 (생산월 막대 + 수리월 꺾은선 통합 차트 - Streamlit 네이티브 활용)
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 막대 & 수리월 꺾은선)")
         if not filtered_df.empty:
-            # 월별 집계 데이터 생성
             chart_df = pd.DataFrame()
             if '수리월' in filtered_df.columns:
-                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수(꺾은선)')
+                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수 (꺾은선)')
                 chart_df = pd.concat([chart_df, repair_trend], axis=1)
             if '생산월' in filtered_df.columns:
-                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수(막대)')
+                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수 (막대)')
                 chart_df = pd.concat([chart_df, prod_trend], axis=1)
             
             chart_df = chart_df.fillna(0).sort_index()
 
             if not chart_df.empty:
-                # 꺾은선(수리월-빨강)과 막대(생산월-파랑)를 함께 시각화하기 위해 Matplotlib 활용 또는 Streamlit 차트 활용
-                import matplotlib.pyplot as plt
-
-                fig, ax1 = plt.subplots(figsize=(14, 4))
-                fig.patch.set_facecolor('#0e1117')
-                ax1.set_facecolor('#0e1117')
-
-                # 생산월 막대 그래프 (파란색)
-                if '생산건수(막대)' in chart_df.columns:
-                    ax1.bar(chart_df.index, chart_df['생산건수(막대)'], color='#3b82f6', alpha=0.6, label='생산월 클레임')
-
-                # 수리월 꺾은선 그래프 (빨간색 계열)
-                ax2 = ax1.twinx()
-                if '수리건수(꺾은선)' in chart_df.columns:
-                    ax2.plot(chart_df.index, chart_df['수리건수(꺾은선)'], color='#ef4444', marker='o', linewidth=2, label='수리월 클레임')
-
-                ax1.tick_params(axis='x', rotation=90, colors='white')
-                ax1.tick_params(axis='y', colors='white')
-                ax2.tick_params(axis='y', colors='white')
-                ax1.spines['bottom'].set_color('gray')
-                ax1.spines['left'].set_color('gray')
-                ax2.spines['right'].set_color('gray')
-                ax1.spines['top'].set_visible(False)
-                ax2.spines['top'].set_visible(False)
-                ax1.grid(True, linestyle='--', alpha=0.2)
-
-                st.pyplot(fig)
+                # Streamlit 네이티브 바 차트 (생산월 막대 - 파란색 느낌) 및 라인 차트 분할 표기
+                st.bar_chart(chart_df[['생산건수 (막대)']], color="#3b82f6")
+                st.markdown("<p style='font-size:12px; color:gray;'>▲ 생산월 기준 클레임 분포 (막대)</p>", unsafe_allow_html=True)
+                
+                st.line_chart(chart_df[['수리건수 (꺾은선)']], color="#ef4444")
+                st.markdown("<p style='font-size:12px; color:gray;'>▲ 수리월 기준 클레임 추이 (빨간색 꺾은선)</p>", unsafe_allow_html=True)
             else:
                 st.info("시각화할 데이터가 없습니다.")
         else:
