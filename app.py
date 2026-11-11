@@ -25,10 +25,6 @@ st.markdown("""
         font-size: 16px !important;
         font-weight: bold !important;
     }
-    /* 달력 내부 카테고리 버튼 디자인을 깔끔한 배지 형태로 맞춤 */
-    div.stButton > button {
-        border-radius: 6px !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,8 +64,6 @@ if 'cal_month' not in st.session_state:
     st.session_state['cal_month'] = datetime.today().month
 if 'selected_date' not in st.session_state:
     st.session_state['selected_date'] = date.today()
-if 'highlighted_task_id' not in st.session_state:
-    st.session_state['highlighted_task_id'] = None
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
@@ -133,31 +127,39 @@ if menu == "업무 현황":
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 
                 with w_cols[i]:
-                    # 날짜 선택 버튼
+                    # 날짜 선택 버튼 (클릭 시 하단 '선택한 날짜 업무 현황'이 해당 날짜로 바뀜)
                     btn_text = f"📌 {day}일" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                         st.rerun()
                     
-                    # 달력 칸 안에 오직 '고객제출', '자료작성' 등 카테고리 배지만 버튼으로 배치 (지저분한 중복/돋보기 제거)
+                    # 달력 칸 안에 카테고리별 색상 배지 생성 (한 줄에 2개씩 배치하여 최대 6개 이상 수용)
+                    badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
+                        # 카테고리별 요청 색상 적용
+                        # 고객제출: 빨간색계열, 자료작성: 파란색계열, 업체접수: 노란색계열
+                        if cat == '고객제출':
+                            bg, fg = "#fee2e2", "#991b1b"
+                        elif cat == '자료작성':
+                            bg, fg = "#dbeafe", "#1e40af"
+                        else: # 업체접수
+                            bg, fg = "#fef08a", "#854d0e"
+                            
+                        # 완료 여부에 따라 회색 처리
                         if t['completed']:
-                            badge_label = f"✔ [완료] {cat}"
+                            bg, fg = "#334155", "#94a3b8"
+                            t_style = "text-decoration: line-through; color: #94a3b8;"
                         else:
-                            badge_label = f"{cat}"
-                        
-                        # 카테고리 배지 버튼 클릭 시 해당 날짜 선택 및 아래 업무 현황 테두리 강조 토글
-                        if st.button(badge_label, key=f"badge_btn_{t['id']}", use_container_width=True):
-                            st.session_state['selected_date'] = current_d
-                            if st.session_state['highlighted_task_id'] == t['id']:
-                                st.session_state['highlighted_task_id'] = None
-                            else:
-                                st.session_state['highlighted_task_id'] = t['id']
-                            st.rerun()
+                            t_style = f"color: {fg}; font-weight: bold;"
 
+                        badges_html += f"<span style='font-size:9px; background:{bg}; color:{fg}; padding:1px 3px; border-radius:3px; white-space:nowrap;'><b style='{t_style}'>{cat}</b></span>"
+                    badges_html += "</div>"
+                    
                     if len(day_tasks) > 6:
-                        st.markdown(f"<div style='font-size:9px; color:gray; text-align:center;'>외 {len(day_tasks)-6}건</div>", unsafe_allow_html=True)
+                        badges_html += f"<div style='font-size:8px; color:gray; margin-top:1px;'>외 {len(day_tasks)-6}건</div>"
+                        
+                    st.markdown(f"<div style='min-height:75px;'>{badges_html}</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -173,13 +175,8 @@ if menu == "업무 현황":
         else:
             for task in st.session_state['tasks']:
                 if str(task['date']) == str(st.session_state['selected_date']):
-                    # 달력에서 해당 카테고리 배지를 클릭했을 때 전체 카드에 빨간 계열 테두리 적용
-                    is_highlighted = (st.session_state['highlighted_task_id'] == task['id'])
-                    
-                    if is_highlighted:
-                        box_style = "border: 3px solid #ef4444; border-radius: 12px; padding: 16px; background-color: #1e293b; margin-bottom: 14px; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);"
-                    else:
-                        box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
+                    # 일반 카드 스타일 (깔끔한 다크 테두리)
+                    box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
 
                     st.markdown(f"<div style='{box_style}'>", unsafe_allow_html=True)
                     
@@ -189,17 +186,15 @@ if menu == "업무 현황":
                     if is_checked != task['completed']:
                         task['completed'] = is_checked
                         task['completed_date'] = str(date.today()) if is_checked else None
-                        if is_checked and st.session_state['highlighted_task_id'] == task['id']:
-                            st.session_state['highlighted_task_id'] = None
                         st.rerun()
 
                     cat = task['category']
                     if cat == '고객제출':
                         c_bg, c_fg = "#fee2e2", "#991b1b"
                     elif cat == '자료작성':
-                        c_bg, c_fg = "#dcfce7", "#166534"
-                    else:
                         c_bg, c_fg = "#dbeafe", "#1e40af"
+                    else:
+                        c_bg, c_fg = "#fef08a", "#854d0e"
 
                     if task['completed']:
                         cols_t[1].markdown(f"""
