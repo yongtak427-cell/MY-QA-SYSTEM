@@ -25,6 +25,10 @@ st.markdown("""
         font-size: 16px !important;
         font-weight: bold !important;
     }
+    /* 달력 내부 카테고리 버튼 디자인을 깔끔한 배지 형태로 맞춤 */
+    div.stButton > button {
+        border-radius: 6px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -121,7 +125,7 @@ if menu == "업무 현황":
         w_cols = st.columns(7)
         for i, day in enumerate(week):
             if day == 0:
-                w_cols[i].markdown("<div style='height: 120px;'></div>", unsafe_allow_html=True)
+                w_cols[i].markdown("<div style='height: 130px;'></div>", unsafe_allow_html=True)
             else:
                 current_d = date(selected_year, selected_month, day)
                 is_holiday = (selected_month, day) in holidays or i == 6  # 일요일 또는 법정 공휴일
@@ -135,16 +139,16 @@ if menu == "업무 현황":
                         st.session_state['selected_date'] = current_d
                         st.rerun()
                     
-                    # 달력 칸 안에 카테고리 배지들을 Streamlit 버튼으로 구현하여 직접 클릭 가능하게 처리
+                    # 달력 칸 안에 오직 '고객제출', '자료작성' 등 카테고리 배지만 버튼으로 배치 (지저분한 중복/돋보기 제거)
                     for t in day_tasks[:6]:
                         cat = t['category']
                         if t['completed']:
-                            badge_label = f"[완료] {cat}"
+                            badge_label = f"✔ [완료] {cat}"
                         else:
                             badge_label = f"{cat}"
                         
-                        # 카테고리 배지 버튼 생성 (누르면 해당 날짜 선택 및 하이라이트 토글)
-                        if st.button(badge_label, key=f"click_badge_{t['id']}", use_container_width=True):
+                        # 카테고리 배지 버튼 클릭 시 해당 날짜 선택 및 아래 업무 현황 테두리 강조 토글
+                        if st.button(badge_label, key=f"badge_btn_{t['id']}", use_container_width=True):
                             st.session_state['selected_date'] = current_d
                             if st.session_state['highlighted_task_id'] == t['id']:
                                 st.session_state['highlighted_task_id'] = None
@@ -169,11 +173,11 @@ if menu == "업무 현황":
         else:
             for task in st.session_state['tasks']:
                 if str(task['date']) == str(st.session_state['selected_date']):
-                    # 선택된 항목일 경우 카드 전체에 빨간색 계열 테두리 적용
+                    # 달력에서 해당 카테고리 배지를 클릭했을 때 전체 카드에 빨간 계열 테두리 적용
                     is_highlighted = (st.session_state['highlighted_task_id'] == task['id'])
                     
                     if is_highlighted:
-                        box_style = "border: 3px solid #ef4444; border-radius: 12px; padding: 16px; background-color: #1e293b; margin-bottom: 14px; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);"
+                        box_style = "border: 3px solid #ef4444; border-radius: 12px; padding: 16px; background-color: #1e293b; margin-bottom: 14px; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);"
                     else:
                         box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
 
