@@ -3,18 +3,19 @@ import pandas as pd
 from datetime import datetime, date
 import calendar
 import os
+import matplotlib.pyplot as plt
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
-# CSS 스타일: 브라우저 탭 디자인 및 여백 최적화
+# CSS 스타일: 화면 여백 최적화
 st.markdown("""
     <style>
     .block-container {
-        padding-top: 1.5rem;
+        padding-top: 2rem;
         padding-bottom: 2rem;
-        padding-left: 2.5rem;
-        padding-right: 2.5rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
         max-width: 100% !important;
     }
     section[data-testid="stSidebar"] .stRadio label {
@@ -32,12 +33,7 @@ st.markdown("""
 # 메인 타이틀
 st.title("Quality Assurance/Management")
 
-# 세션 스테이트 초기화 (탭 및 데이터 관리)
-if 'open_tabs' not in st.session_state:
-    st.session_state['open_tabs'] = ["필드 클레임 현황"]  # 기본 열린 탭
-if 'active_tab' not in st.session_state:
-    st.session_state['active_tab'] = "필드 클레임 현황"
-
+# 세션 스테이트 초기화 (메뉴 상태 및 데이터 지속 유지용)
 if 'tasks' not in st.session_state:
     st.session_state['tasks'] = [
         {
@@ -66,59 +62,24 @@ if 'tasks' not in st.session_state:
         }
     ]
 
-if 'cal_year' not in st.session_state:
-    st.session_state['cal_year'] = datetime.today().year
-if 'cal_month' not in st.session_state:
-    st.session_state['cal_month'] = datetime.today().month
-if 'selected_date' not in st.session_state:
-    st.session_state['selected_date'] = date.today()
-if 'editing_task_id' not in st.session_state:
-    st.session_state['editing_task_id'] = None
+if 'cal_year' not in st.session_state: st.session_state['cal_year'] = datetime.today().year
+if 'cal_month' not in st.session_state: st.session_state['cal_month'] = datetime.today().month
+if 'selected_date' not in st.session_state: st.session_state['selected_date'] = date.today()
+if 'editing_task_id' not in st.session_state: st.session_state['editing_task_id'] = None
 
-# 지속 유지용 클레임 데이터 저장소 초기화
-if 'claim_df' not in st.session_state:
-    st.session_state['claim_df'] = pd.DataFrame()
-if 'uploaded_file_name' not in st.session_state:
-    st.session_state['uploaded_file_name'] = None
+# 클레임 데이터 및 필터 상태 세션 유지 보장
+if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
+if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
 menu_options = ["업무 현황", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"]
-selected_menu = st.sidebar.radio("메뉴 선택", menu_options, label_visibility="collapsed")
+menu = st.sidebar.radio("메뉴 선택", menu_options, label_visibility="collapsed")
 
-# 사용자가 사이드바에서 메뉴를 누르면, 탭 목록에 추가하고 활성화 탭으로 지정
-if selected_menu not in st.session_state['open_tabs']:
-    st.session_state['open_tabs'].append(selected_menu)
-st.session_state['active_tab'] = selected_menu
+st.markdown("---")
 
-# --- 🌐 인터넷 창(브라우저 탭) 형태 UI 구현 ---
-st.markdown("<hr style='margin: 5px 0px 10px 0px;'>", unsafe_allow_html=True)
-tab_cols = st.columns(len(st.session_state['open_tabs']) + 1)
-
-for idx, t_name in enumerate(st.session_state['open_tabs']):
-    with tab_cols[idx]:
-        is_active = (t_name == st.session_state['active_tab'])
-        btn_label = f"📁 {t_name} 활성" if is_active else f"🗂️ {t_name}"
-        if st.button(btn_label, key=f"tab_btn_{t_name}", use_container_width=True):
-            st.session_state['active_tab'] = t_name
-            st.rerun()
-
-# 탭 닫기 버튼 (열린 탭이 2개 이상일 때만 표시)
-if len(st.session_state['open_tabs']) > 1:
-    with tab_cols[-1]:
-        close_target = st.selectbox("탭 닫기", ["선택 안함"] + st.session_state['open_tabs'], key="close_tab_select", label_visibility="collapsed")
-        if close_target != "선택 안함":
-            st.session_state['open_tabs'].remove(close_target)
-            if st.session_state['active_tab'] == close_target:
-                st.session_state['active_tab'] = st.session_state['open_tabs'][0]
-            st.rerun()
-
-st.markdown("<hr style='margin: 5px 0px 20px 0px;'>", unsafe_allow_html=True)
-
-# --- 📄 선택된 탭(메뉴) 내용 출력 ---
-current_tab = st.session_state['active_tab']
-
-if current_tab == "업무 현황":
+# --- 1. 업무 현황 메뉴 ---
+if menu == "업무 현황":
     st.subheader("📋 월별 캘린더 및 업무 일정 관리")
     
     col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
@@ -142,7 +103,6 @@ if current_tab == "업무 현황":
             st.rerun()
 
     st.markdown("---")
-
     selected_year = st.session_state['cal_year']
     selected_month = st.session_state['cal_month']
     cal_matrix = calendar.monthcalendar(selected_year, selected_month)
@@ -161,7 +121,6 @@ if current_tab == "업무 현황":
             else:
                 current_d = date(selected_year, selected_month, day)
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
-                
                 with w_cols[i]:
                     btn_text = f"📌 {day}일" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
@@ -171,35 +130,18 @@ if current_tab == "업무 현황":
                     badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
-                        if cat == '고객제출':
-                            bg, fg = "#fee2e2", "#991b1b"
-                        elif cat == '자료작성':
-                            bg, fg = "#dbeafe", "#1e40af"
-                        else:
-                            bg, fg = "#fef08a", "#854d0e"
-                            
-                        if t['completed']:
-                            bg, fg = "#334155", "#94a3b8"
-                            t_style = "text-decoration: line-through; color: #94a3b8;"
-                        else:
-                            t_style = f"color: {fg}; font-weight: bold;"
-
-                        badges_html += f"<span style='font-size:9px; background:{bg}; color:{fg}; padding:1px 3px; border-radius:3px; white-space:nowrap;'><b style='{t_style}'>{cat}</b></span>"
+                        bg, fg = ("#fee2e2", "#991b1b") if cat == '고객제출' else ("#dbeafe", "#1e40af") if cat == '자료작성' else ("#fef08a", "#854d0e")
+                        t_style = "text-decoration: line-through; color: #94a3b8;" if t['completed'] else f"color: {fg}; font-weight: bold;"
+                        badges_html += f"<span style='font-size:9px; background:{bg}; color:{fg}; padding:1px 3px; border-radius:3px;'><b style='{t_style}'>{cat}</b></span>"
                     badges_html += "</div>"
-                    
-                    if len(day_tasks) > 6:
-                        badges_html += f"<div style='font-size:8px; color:gray; margin-top:1px;'>외 {len(day_tasks)-6}건</div>"
-                        
                     st.markdown(f"<div style='min-height:75px;'>{badges_html}</div>", unsafe_allow_html=True)
 
     st.markdown("---")
-
     col_left, col_right = st.columns(2)
 
     with col_left:
         st.markdown(f"### 📌 선택한 날짜: {st.session_state['selected_date']} 업무 현황")
         target_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]
-        
         if not target_tasks:
             st.info("선택된 날짜에 등록된 업무가 없습니다.")
         else:
@@ -207,7 +149,6 @@ if current_tab == "업무 현황":
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 cols_t = st.columns([0.15, 0.65, 0.2])
                 is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
-                
                 if is_checked != task['completed']:
                     task['completed'] = is_checked
                     task['completed_date'] = str(date.today()) if is_checked else None
@@ -278,13 +219,13 @@ if current_tab == "업무 현황":
                     st.success("수정되었습니다!")
                     st.rerun()
 
-elif current_tab == "필드 클레임 현황":
+# --- 2. 필드 클레임 현황 메뉴 ---
+elif menu == "필드 클레임 현황":
     st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
     st.markdown("클레임 RAW DATA 엑셀 파일을 업로드하여 품목별, 차종별, 현상별 필드 클레임 추이와 다각도 분석 그래프를 확인하세요.")
 
     uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
 
-    # 파일이 업로드되면 세션에 저장, 사용자가 파일 업로드를 지우면 데이터도 초기화
     if uploaded_file is not None:
         if st.session_state['uploaded_file_name'] != uploaded_file.name:
             try:
@@ -296,9 +237,8 @@ elif current_tab == "필드 클레임 현황":
             except Exception as e:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
     else:
-        # 업로드된 파일이 없으면 데이터 초기화
-        st.session_state['claim_df'] = pd.DataFrame()
-        st.session_state['uploaded_file_name'] = None
+        # 사용자가 업로드 파일을 지우지 않은 경우 기존 데이터 유지, 명시적으로 지울 때만 초기화되도록 처리
+        pass
 
     df = st.session_state['claim_df']
 
@@ -312,12 +252,16 @@ elif current_tab == "필드 클레임 현황":
                 return st.multiselect(f"{label} (검색 및 다중 선택)", options, key=f"filter_{col_name}")
             return []
 
+        # 요청하신 3줄 배치 구조 적용
+        # 첫째 줄: 품번, 부품명, 차종, 현상명, 현상상세
+        # 둘째 줄: 생산월, 판매월, 수리월, 사용개월, 주행거리
+        # 셋째 줄: VIN, 판매국가, 공장
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
         with r1_c1: selected_part_nos = get_multiselect_filter("품번", "품번")
         with r1_c2: selected_part_names = get_multiselect_filter("부품명", "부품명")
         with r1_c3: selected_cars = get_multiselect_filter("차종", "차종")
-        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")
-        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세")
+        with r1_c4: selected_phen_names = get_multiselect_filter("현상명", "현상명")       # BL1열 참고
+        with r1_c5: selected_phen_details = get_multiselect_filter("현상상세", "현상상세") # H1열 현상열 참고
 
         r2_c1, r2_c2, r2_c3, r2_c4, r2_c5 = st.columns(5)
         with r2_c1: selected_prod_months = get_multiselect_filter("생산월", "생산월")
@@ -325,16 +269,17 @@ elif current_tab == "필드 클레임 현황":
         with r2_c3: selected_repair_months = get_multiselect_filter("수리월", "수리월")
         with r2_c4: 
             usage_options = [3, 6, 9, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120]
-            selected_usages = st.multiselect("사용개월 선택", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월")
+            selected_usages = st.multiselect("사용개월 선택", usage_options, format_func=lambda x: f"{x}개월" if x<=12 else f"{x}개월", key="filter_usage")
         with r2_c5:
             mile_options = [5000, 10000, 30000, 50000, 70000, 100000, 999999]
-            selected_miles = st.multiselect("주행거리 구간 선택", mile_options, format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하")
+            selected_miles = st.multiselect("주행거리 구간 선택", mile_options, format_func=lambda x: "100,000 이상" if x==999999 else f"{x:,} 이하", key="filter_mile")
 
         r3_c1, r3_c2, r3_c3 = st.columns(3)
         with r3_c1: selected_vins = get_multiselect_filter("VIN", "VIN")
         with r3_c2: selected_countries = get_multiselect_filter("판매국가", "판매국가")
         with r3_c3: selected_plants = get_multiselect_filter("공장", "공장")
 
+        # 필터링 적용 로직
         filtered_df = df.copy()
         if selected_part_nos: filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
         if selected_part_names: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
@@ -373,30 +318,68 @@ elif current_tab == "필드 클레임 현황":
             filtered_df = filtered_df[mile_mask]
 
         st.markdown("---")
-        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 & 수리월 빨간색 꺾은선 통합)")
-        chart_df = pd.DataFrame()
-        if '수리월' in filtered_df.columns:
-            chart_df = pd.concat([chart_df, filtered_df.groupby('수리월').size().rename('수리건수 (꺾은선)')], axis=1)
-        if '생산월' in filtered_df.columns:
-            chart_df = pd.concat([chart_df, filtered_df.groupby('생산월').size().rename('생산건수 (막대)')], axis=1)
-        chart_df = chart_df.fillna(0).sort_index()
 
-        if not chart_df.empty:
-            st.bar_chart(chart_df, color=["#3b82f6", "#ef4444"])
+        # 3. 상단 추이 분석 그래프 (요청하신 대로 꺾은선: 왼쪽 축, 막대: 오른쪽 축 배치)
+        st.markdown("### 1. 차종/기간별 클레임 추이 분석 (수리월 꺾은선 [좌측 축] & 생산월 파란색 막대 [우측 축])")
+        if not filtered_df.empty:
+            chart_df = pd.DataFrame()
+            if '수리월' in filtered_df.columns:
+                repair_trend = filtered_df.groupby('수리월').size().rename('수리건수 (꺾은선)')
+                chart_df = pd.concat([chart_df, repair_trend], axis=1)
+            if '생산월' in filtered_df.columns:
+                prod_trend = filtered_df.groupby('생산월').size().rename('생산건수 (막대)')
+                chart_df = pd.concat([chart_df, prod_trend], axis=1)
+            
+            chart_df = chart_df.fillna(0).sort_index()
+
+            if not chart_df.empty:
+                fig, ax1 = plt.subplots(figsize=(14, 5))
+                fig.patch.set_facecolor('#0e1117')
+                ax1.set_facecolor('#0e1117')
+
+                # 꺾은선 그래프 (수리월) -> 왼쪽에 축값 배치
+                if '수리건수 (꺾은선)' in chart_df.columns:
+                    ax1.plot(chart_df.index, chart_df['수리건수 (꺾은선)'], color='#ef4444', marker='o', linewidth=2.5, label='수리월 클레임 (꺾은선)')
+
+                # 막대 그래프 (생산월) -> 오른쪽에 축값 배치 (twinx 활용)
+                ax2 = ax1.twinx()
+                if '생산건수 (막대)' in chart_df.columns:
+                    ax2.bar(chart_df.index, chart_df['생산건수 (막대)'], color='#3b82f6', alpha=0.5, label='생산월 클레임 (막대)')
+
+                ax1.set_ylabel("수리건수 (꺾은선)", color='#ef4444', fontsize=12, fontweight='bold')
+                ax2.set_ylabel("생산건수 (막대)", color='#3b82f6', fontsize=12, fontweight='bold')
+
+                ax1.tick_params(axis='x', rotation=90, colors='white')
+                ax1.tick_params(axis='y', colors='white')
+                ax2.tick_params(axis='y', colors='white')
+                ax1.spines['bottom'].set_color('gray')
+                ax1.spines['left'].set_color('gray')
+                ax2.spines['right'].set_color('gray')
+                ax1.spines['top'].set_visible(False)
+                ax2.spines['top'].set_visible(False)
+                ax1.grid(True, linestyle='--', alpha=0.2)
+
+                st.pyplot(fig)
+            else:
+                st.info("시각화할 데이터가 없습니다.")
         else:
-            st.info("시각화할 데이터가 없습니다.")
+            st.info("표시할 트렌드 데이터가 없습니다.")
 
         st.markdown("---")
+
+        # 4. 하단 다각도 분석 막대 그래프
         st.markdown("### 2. 다각도 클레임 현황 분석 (막대 그래프)")
-        b1, b2 = st.columns(2)
-        with b1:
+        b_col1, b_col2 = st.columns(2)
+
+        with b_col1:
             st.markdown("##### 📊 현상명별 클레임 현황")
             if '현상명' in filtered_df.columns: st.bar_chart(filtered_df.groupby('현상명').size())
             st.markdown("##### 📊 주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
                 st.bar_chart(filtered_df.groupby('주행거리_구간', observed=False).size())
-        with b2:
+
+        with b_col2:
             st.markdown("##### 📊 사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns: st.bar_chart(filtered_df.groupby('사용개월').size())
             st.markdown("##### 📊 차종별 클레임 현황")
@@ -408,7 +391,8 @@ elif current_tab == "필드 클레임 현황":
     else:
         st.info("분석할 클레임 엑셀 파일을 업로드해 주세요.")
 
-elif current_tab == "개선 활동 관리":
+# --- 3. 개선 활동 관리 메뉴 ---
+elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
     st.table(pd.DataFrame({
         "품번 / 부품명": ["251002B700 (쿨런트 펌프)", "251003CAC0 (PUMP ASSY)"],
@@ -418,12 +402,14 @@ elif current_tab == "개선 활동 관리":
         "상태": ["적용 완료", "적용 대기"]
     }))
 
-elif current_tab == "고객사 클레임 비용 분석":
+# --- 4. 고객사 클레임 비용 분석 메뉴 ---
+elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 분석")
     st.info("현대, 모비스, 현대위아, 글로비스 원본 시트 자동 취합 및 환율/분담율 계산 결과가 여기에 표시됩니다.")
     st.dataframe(pd.DataFrame({"고객사": ["현대 / 글로비스", "현대위아", "모비스"], "합산/청구 비용": ["₩ 18,450,000", "₩ 12,300,000", "₩ 11,830,000"]}), use_container_width=True)
 
-elif current_tab == "구글 시트 연동 설정":
+# --- 5. 구글 시트 연동 설정 메뉴 ---
+elif menu == "구글 시트 연동 설정":
     st.subheader("구글 드라이브 & 스프레드시트 연동")
     st.text_input("필드 클레임 현황 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
     st.text_input("고객사 클레임 비용 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
