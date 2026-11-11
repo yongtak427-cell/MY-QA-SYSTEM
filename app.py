@@ -6,7 +6,7 @@ import calendar
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
-# CSS 스타일: 화면 여백 축소(100% 배율 최적화), 강조 테두리 스타일 등 커스텀
+# CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
     <style>
     .block-container {
@@ -24,13 +24,6 @@ st.markdown("""
     div.stCheckbox label p {
         font-size: 16px !important;
         font-weight: bold !important;
-    }
-    /* 달력 내 카테고리 버튼 투명 및 인라인 스타일 최적화 */
-    .cal-task-btn div.stButton > button {
-        padding: 2px 4px !important;
-        min-height: 0px !important;
-        font-size: 10px !important;
-        width: 100% !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -140,10 +133,10 @@ if menu == "업무 현황":
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                     
-                    # 달력 칸 안에 카테고리를 클릭형 버튼(또는 배지)으로 최대 6개까지 표시
+                    # 달력 칸 안에 카테고리를 2개씩 배치 형태로 표시 (클릭 시 하이라이트 토글)
+                    badges_html = "<div style='display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-start;'>"
                     for t in day_tasks[:6]:
                         cat = t['category']
-                        # 카테고리별 색상 매칭 (고객제출: 빨강계열, 자료작성: 초록계열, 업체접수: 파랑계열)
                         if cat == '고객제출':
                             bg, fg = "#fee2e2", "#991b1b"
                         elif cat == '자료작성':
@@ -151,23 +144,29 @@ if menu == "업무 현황":
                         else: # 업체접수
                             bg, fg = "#dbeafe", "#1e40af"
                             
-                        # 완료 여부에 따라 회색 처리
                         if t['completed']:
                             bg, fg = "#334155", "#94a3b8"
+                            t_style = "text-decoration: line-through; color: #94a3b8;"
+                        else:
+                            t_style = f"color: {fg};"
+
+                        badges_html += f"<span style='font-size:10px; background:{bg}; color:{fg}; padding:1px 4px; border-radius:3px; white-space:nowrap;'><b style='{t_style}'>{cat}</b></span>"
+                    badges_html += "</div>"
+                    
+                    if len(day_tasks) > 6:
+                        badges_html += f"<div style='font-size:9px; color:gray; margin-top:2px;'>외 {len(day_tasks)-6}건</div>"
                         
-                        # 각 카테고리 배지를 클릭하면 해당 날짜 선택 및 업무 하이라이트 토글
-                        task_btn_label = f"[{cat}]" if not t['completed'] else f"[완료:{cat}]"
-                        if st.button(task_btn_label, key=f"task_badge_{t['id']}"):
+                    st.markdown(f"<div style='min-height:70px;'>{badges_html}</div>", unsafe_allow_html=True)
+                    
+                    # 달력 내 업무별 클릭 감지를 위한 투명 버튼들 배치
+                    for t in day_tasks[:6]:
+                        if st.button(f"👉 {t['category']} ({t['title'][:4]}..)", key=f"click_task_{t['id']}"):
                             st.session_state['selected_date'] = current_d
-                            # 다시 누르면 꺼지고, 누르면 켜지는 토글 기능
                             if st.session_state['highlighted_task_id'] == t['id']:
                                 st.session_state['highlighted_task_id'] = None
                             else:
                                 st.session_state['highlighted_task_id'] = t['id']
                             st.rerun()
-
-                    if len(day_tasks) > 6:
-                        st.markdown(f"<div style='font-size:9px; color:gray; text-align:center;'>외 {len(day_tasks)-6}건</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -183,12 +182,12 @@ if menu == "업무 현황":
         else:
             for task in st.session_state['tasks']:
                 if str(task['date']) == str(st.session_state['selected_date']):
-                    # 하이라이트(빨간색 테두리) 여부 확인
+                    # 선택된 항목일 경우 빨간 테두리 강조
                     is_highlighted = (st.session_state['highlighted_task_id'] == task['id'])
-                    border_style = "border: 2.5px solid #ef4444; border-radius: 10px; padding: 10px; background-color: #1e293b;" if is_highlighted else ""
+                    border_css = "border: 2.5px solid #ef4444; border-radius: 10px; padding: 12px; background-color: #1e293b; margin-bottom: 12px;" if is_highlighted else "border: 1px solid #334155; border-radius: 10px; padding: 12px; margin-bottom: 12px;"
 
                     with st.container():
-                        st.markdown(f"<div style='{border_style} margin-bottom: 10px;'>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='{border_css}'>", unsafe_allow_html=True)
                         cols_t = st.columns([0.2, 0.8])
                         
                         # 완료 버튼
@@ -197,6 +196,9 @@ if menu == "업무 현황":
                         if is_checked != task['completed']:
                             task['completed'] = is_checked
                             task['completed_date'] = str(date.today()) if is_checked else None
+                            # 완료를 누르면 하이라이트 해제
+                            if is_checked and st.session_state['highlighted_task_id'] == task['id']:
+                                st.session_state['highlighted_task_id'] = None
                             st.rerun()
                         
                         # 카테고리별 색상 지정
