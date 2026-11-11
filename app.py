@@ -173,11 +173,9 @@ if menu == "업무 현황":
         if not target_tasks:
             st.info("선택된 날짜에 등록된 업무가 없습니다. 우측에서 일정을 등록해 보세요.")
         else:
-            for task in t_list := [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]:
-                # 불필요한 빈 컨테이너 테두리(가로바)를 없애고 순수 카드 HTML 구조로 깔끔하게 렌더링
+            for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
 
-                # 체크박스와 내용을 포함하는 단일 HTML 블록 생성
                 cols_t = st.columns([0.2, 0.8])
                 is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                 
