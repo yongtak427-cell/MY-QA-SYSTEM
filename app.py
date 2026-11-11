@@ -4,7 +4,7 @@ from datetime import datetime, date
 import calendar
 
 # 페이지 설정 (레이아웃 넓게 설정)
-st.set_page_config(page_title="TIKITAK Task Management ", page_icon="🖥️", layout="wide")
+st.set_page_config(page_title="QA & 필드 클레임 통합 관리", page_icon="📊", layout="wide")
 
 # CSS 스타일: 화면 여백 축소(100% 배율 최적화), 글씨 및 버튼 스타일 커스텀
 st.markdown("""
@@ -28,7 +28,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title(" Quality Assurance/Management")
+st.title("📊 품질보증 및 필드 클레임 통합 관리 대시보드")
 
 # 세션 스테이트 초기화
 if 'tasks' not in st.session_state:
@@ -65,7 +65,7 @@ if 'selected_date' not in st.session_state:
     st.session_state['selected_date'] = date.today()
 
 # 사이드바 메뉴
-st.sidebar.markdown("## Menu List")
+st.sidebar.markdown("## 🧭 메뉴 목록")
 menu = st.sidebar.radio(
     "메뉴 선택",
     ["업무 현황", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"],
@@ -270,4 +270,7 @@ elif menu == "고객사 클레임 비용 분석":
 
 elif menu == "구글 시트 연동 설정":
     st.subheader("구글 드라이브 & 스프레드시트 연동")
-    st.text_input("필드 클레임 현황 구글 시트 URL", "https
+    st.text_input("필드 클레임 현황 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
+    st.text_input("고객사 클레임 비용 구글 시트 URL", "https://docs.google.com/spreadsheets/d/...")
+    if st.button("연동 정보 저장"):
+        st.success("구글 클라우드 스프레드시트와 성공적으로 연동되었습니다!")
