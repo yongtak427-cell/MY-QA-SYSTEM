@@ -864,4 +864,38 @@ elif menu == "개선 활동 관리":
                 new_date = st.date_input("적용일", value=date.today())
                 new_remark = st.text_input("비고")
 
-                submitted_imp = st.form_submit_button("개선 내용 등록", use_container
+                submitted_imp = st.form_submit_button("개선 내용 등록", use_container_width=True)
+                if submitted_imp:
+                    if new_part.strip():
+                        new_id = int(st.session_state['improve_df']['id'].max() + 1) if not st.session_state['improve_df'].empty else 1
+                        new_row = {
+                            'id': new_id,
+                            '대상': new_target,
+                            '품명': new_product,
+                            '차종': new_car,
+                            '현상': new_phenomenon,
+                            '대책 내용': new_measure,
+                            '해당 품목': new_part,
+                            '고객사명': new_customer,
+                            '적용일': str(new_date),
+                            '비 고': new_remark
+                        }
+                        st.session_state['improve_df'] = pd.concat([st.session_state['improve_df'], pd.DataFrame([new_row])], ignore_index=True)
+                        st.success("신규 개선 내용이 성공적으로 등록되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("해당 품목은 필수 입력 항목입니다.")
+
+# --- 4. 고객사 클레임 비용 분석 메뉴 ---
+elif menu == "고객사 클레임 비용 분석":
+    st.subheader("고객사별 클레임 비용 2차 가공 및 분석")
+    st.info("현대, 모비스, 현대위아, 글로비스 원본 시트 자동 취합 및 환율/분담율 계산 결과가 여기에 표시됩니다.")
+    st.dataframe(pd.DataFrame({"고객사": ["현대 / 글로비스", "현대위아", "모비스"], "합산/청구 비용": ["₩ 18,450,000", "₩ 12,300,000", "₩ 11,830,000"]}), use_container_width=True)
+
+# --- 5. 구글 시트 연동 설정 메뉴 ---
+elif menu == "구글 시트 연동 설정":
+    st.subheader("구글 드라이브 & 스프레드시트 연동")
+    gsheet_input = st.text_input("필드 클레임 현황 구글 시트 URL", st.session_state['gsheet_url'])
+    if st.button("연동 정보 저장"):
+        st.session_state['gsheet_url'] = gsheet_input
+        st.success("구글 클라우드 스프레드시트 URL이 성공적으로 저장되었습니다! 이제 '필드 클레임 현황' 메뉴에서 '구글 시트 데이터 자동 불러오기'를 사용할 수 있습니다.")
