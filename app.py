@@ -77,10 +77,23 @@ if 'delete_confirm_id' not in st.session_state: st.session_state['delete_confirm
 if 'save_confirm_type' not in st.session_state: st.session_state['save_confirm_type'] = None
 if 'pending_form_data' not in st.session_state: st.session_state['pending_form_data'] = None
 
-# 클레임 데이터 세션 유지 보장
+# 클레임 데이터 및 개선활동 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
+
+if 'improve_df' not in st.session_state:
+    try:
+        excel_path = '클레임 개선 현황.xlsx'
+        if os.path.exists(excel_path):
+            imp_df = pd.read_excel(excel_path, sheet_name=0)
+            # 병합 셀 등으로 인해 비어있는 '대상', '품명', '차종', '현상' 등 상위 데이터 채우기 (ffill)
+            imp_df[['대상', '품명', '차종', '현상', '대책 내용']] = imp_df[['대상', '품명', '차종', '현상', '대책 내용']].ffill()
+            st.session_state['improve_df'] = imp_df
+        else:
+            st.session_state['improve_df'] = pd.DataFrame()
+    except Exception:
+        st.session_state['improve_df'] = pd.DataFrame()
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## Menu List")
@@ -305,14 +318,12 @@ elif menu == "업무 등록/관리":
             with st.form("task_manage_form"):
                 f_title = st.text_input("업무 제목", value=editing_task['title'] if editing_task else "")
                 
-                # 작성 일자 및 마감 기한 (달력에서 선택한 날짜가 기본값으로 동기화되도록 설정)
                 default_date = editing_task['date'] if editing_task else st.session_state['selected_date']
                 default_deadline = editing_task['deadline'] if editing_task else st.session_state['selected_date']
                 
                 f_date = st.date_input("작성 일자", value=default_date)
                 f_deadline = st.date_input("마감 기한", value=default_deadline)
                 
-                # 카테고리 항목 추가 (기존 + 업무 확인, 업무 협의, 회의)
                 categories = ["고객제출", "업체접수", "자료작성", "업무 확인", "업무 협의", "회의"]
                 f_category = st.selectbox("카테고리 선택", categories, index=categories.index(editing_task['category']) if editing_task and editing_task['category'] in categories else 0)
                 
@@ -620,14 +631,53 @@ elif menu == "필드 클레임 현황":
 
 # --- 3. 개선 활동 관리 메뉴 ---
 elif menu == "개선 활동 관리":
-    st.subheader("품목별 개선 내용 및 적용 현황 타임라인")
-    st.table(pd.DataFrame({
-        "품번 / 부품명": ["251002B700 (쿨런트 펌프)", "251003CAC0 (PUMP ASSY)"],
-        "주요 불량 현상": ["엔진 소음/이음", "성능 불량 / 누수"],
-        "개선 조치 내용": ["임펠러 금형 수정 및 실링재 변경", "하우스 가스켓 조립 공정 치구 보완"],
-        "적용 시점": ["2026-07-15 (Lot: 26G15)", "2026-11-01 (예정)"],
-        "상태": ["적용 완료", "적용 대기"]
-    }))
+    st.subheader("품목별 개선 내용 및 적용 현황 관리")
+    st.markdown("첨부된 엑셀 데이터 기반으로 대상, 품명, 차종, 현상, 해당 품목, 고객사명 조건을 선택하여 조회합니다.")
+
+    imp_df = st.session_state['improve_df']
+
+    if not imp_df.empty:
+        st.markdown("---")
+        st.markdown("개선 활동 내역 조회 및 검색 (대상, 품명, 차종, 현상, 해당 품목, 고객사명)")
+
+        def get_imp_filter(label, col_name):
+            if col_name in imp_df.columns:
+                options = sorted([str(x) for x in imp_df[col_name].dropna().unique() if str(x) != 'nan' and str(x) != '-'])
+                return st.multiselect(f"{label}", options, key=f"imp_filter_{col_name}")
+            return []
+
+        c1, c2, c3 = st.columns(3)
+        with c1: selected_targets = get_imp_filter("대상", "대상")
+        with c2: selected_product_names = get_imp_filter("품명", "품명")
+        with c3: selected_car_types = get_imp_filter("차종", "차종")
+
+        c4, c5, c6 = st.columns(3)
+        with c4: selected_phenomenons = get_imp_filter("현상", "현상")
+        with c5: selected_parts = get_imp_filter("해당 품목", "해당 품목")
+        with c6: selected_customers = get_imp_filter("고객사명", "고객사명")
+
+        filtered_imp = imp_df.copy()
+        if selected_targets and '대상' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['대상'].astype(str).isin(selected_targets)]
+        if selected_product_names and '품명' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['품명'].astype(str).isin(selected_product_names)]
+        if selected_car_types and '차종' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['차종'].astype(str).isin(selected_car_types)]
+        if selected_phenomenons and '현상' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['현상'].astype(str).isin(selected_phenomenons)]
+        if selected_parts and '해당 품목' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['해당 품목'].astype(str).isin(selected_parts)]
+        if selected_customers and '고객사명' in filtered_imp.columns:
+            filtered_imp = filtered_imp[filtered_imp['고객사명'].astype(str).isin(selected_customers)]
+
+        st.markdown("---")
+        st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
+        
+        # 비고 컬럼 제외하고 표시
+        display_imp = filtered_imp.drop(columns=['비 고'], errors='ignore')
+        st.dataframe(display_imp, use_container_width=True)
+    else:
+        st.info("'클레임 개선 현황.xlsx' 파일을 찾을 수 없거나 데이터가 비어있습니다.")
 
 # --- 4. 고객사 클레임 비용 분석 메뉴 ---
 elif menu == "고객사 클레임 비용 분석":
