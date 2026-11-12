@@ -304,10 +304,18 @@ elif menu == "업무 등록/관리":
         else:
             with st.form("task_manage_form"):
                 f_title = st.text_input("업무 제목", value=editing_task['title'] if editing_task else "")
-                f_date = st.date_input("일정 날짜", value=editing_task['date'] if editing_task else st.session_state['selected_date'])
-                f_deadline = st.date_input("마감 기한", value=editing_task['deadline'] if editing_task else date.today())
-                categories = ["고객제출", "업체접수", "자료작성"]
+                
+                # 작성 일자 및 마감 기한 (달력에서 선택한 날짜가 기본값으로 동기화되도록 설정)
+                default_date = editing_task['date'] if editing_task else st.session_state['selected_date']
+                default_deadline = editing_task['deadline'] if editing_task else st.session_state['selected_date']
+                
+                f_date = st.date_input("작성 일자", value=default_date)
+                f_deadline = st.date_input("마감 기한", value=default_deadline)
+                
+                # 카테고리 항목 추가 (기존 + 업무 확인, 업무 협의, 회의)
+                categories = ["고객제출", "업체접수", "자료작성", "업무 확인", "업무 협의", "회의"]
                 f_category = st.selectbox("카테고리 선택", categories, index=categories.index(editing_task['category']) if editing_task and editing_task['category'] in categories else 0)
+                
                 f_requester = st.text_input("요청자", value=editing_task['requester'] if editing_task else "")
                 f_memo = st.text_area("메모 및 상세 내용", value=editing_task['memo'] if editing_task else "")
                 
@@ -366,7 +374,6 @@ elif menu == "필드 클레임 현황":
         if len(df_raw.columns) > 63:
             df_raw['현상명'] = df_raw.iloc[:, 63].astype(str)
             
-        # 숫자형 데이터 컬럼 예외 처리 (문자열이 섞여 있어도 에러 안 나도록 숫자로 변환)
         if '사용개월' in df_raw.columns:
             df_raw['사용개월'] = pd.to_numeric(df_raw['사용개월'], errors='coerce').fillna(0)
         if '주행거리Km' in df_raw.columns:
