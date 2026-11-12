@@ -82,7 +82,7 @@ if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFra
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 
-# 첨부된 엑셀 데이터 임베딩 초기화
+# 첨부된 엑셀 전체 데이터 임베딩 초기화
 if 'improve_df' not in st.session_state:
     raw_data = [
         {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '누수/소음', '대책 내용': 'M/SEAL M/R 재질 환원(ES5 ▶ ES4)', '해당 품목': '25100-3CAC0', '고객사명': '-', '적용일': '2016-06-27', '비 고': ''},
@@ -691,7 +691,6 @@ elif menu == "개선 활동 관리":
 
     imp_df = st.session_state['improve_df']
 
-    # 탭 생성 (조회/검색 / 개선 내용 추가)
     tab1, tab2 = st.tabs(["🔍 개선 내역 조회 및 검색", "➕ 신규 개선 내용 추가"])
 
     with tab1:
@@ -731,7 +730,6 @@ elif menu == "개선 활동 관리":
             st.markdown("---")
             st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
             
-            # 클레임 현황 하단부 상세 내역처럼 깔끔하게 테이블 출력
             display_imp = filtered_imp.drop(columns=['비 고'], errors='ignore')
             st.dataframe(display_imp, use_container_width=True)
         else:
