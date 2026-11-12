@@ -188,34 +188,34 @@ elif menu == "업무 등록/관리":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 
-                # 폭 비율 조정: 완료 체크박스(0.1), 내용 카드(0.75), 수정/삭제 버튼 영역(0.15) -> 버튼 영역 최소화 및 카드 확대
-                cols_t = st.columns([0.1, 0.75, 0.15])
-                
-                is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
-                if is_checked != task['completed']:
-                    task['completed'] = is_checked
-                    task['completed_date'] = str(date.today()) if is_checked else None
-                    st.rerun()
+                # 폭 비율 조정: 내용 카드(0.85), 우측 버튼/체크박스 영역(0.15)
+                cols_t = st.columns([0.85, 0.15])
 
                 cat = task['category']
                 c_bg, c_fg = ("#fee2e2", "#991b1b") if cat == '고객제출' else ("#dbeafe", "#1e40af") if cat == '자료작성' else ("#fef08a", "#854d0e")
                 update_tag = f" | <span style='color: #f59e0b; font-size: 12px;'>수정일자 : {task['updated_date']}</span>" if task.get('updated_date') else ""
 
+                # white-space: pre-wrap 적용하여 작성한 엔터/줄바꿈 형식 그대로 유지
                 card_html = f"""
                     <div style='{box_style}'>
                         <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
                         <span style='font-size:12px; background:{c_bg}; color:{c_fg}; padding:2px 6px; border-radius:4px; font-weight:bold;'>{cat}</span>{update_tag}<br>
-                        <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5;'>
-                            <b>요청자:</b> {task['requester']}<br>
-                            <b>마감기한:</b> {task['deadline']}<br>
-                            <b>메모 및 상세 내용:</b> {task['memo']}
-                        </div>
+                        <div style='font-size: 14px; color: #e2e8f0; margin-top: 6px; line-height: 1.5; white-space: pre-wrap;'><b>요청자:</b> {task['requester']}
+<b>마감기한:</b> {task['deadline']}
+<b>메모 및 상세 내용:</b>
+{task['memo']}</div>
                     </div>
                 """
-                cols_t[1].markdown(card_html, unsafe_allow_html=True)
+                cols_t[0].markdown(card_html, unsafe_allow_html=True)
 
-                # 수정/삭제 버튼을 우측에 위/아래로 배치 (최소 공간)
-                with cols_t[2]:
+                # 우측 영역: 완료 체크박스 -> 수정 버튼 -> 삭제 버튼 위에서 아래로 배치
+                with cols_t[1]:
+                    is_checked = st.checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
+                    if is_checked != task['completed']:
+                        task['completed'] = is_checked
+                        task['completed_date'] = str(date.today()) if is_checked else None
+                        st.rerun()
+
                     if st.button("✏️ 수정", key=f"edit_btn_{task['id']}", use_container_width=True):
                         st.session_state['editing_task_id'] = task['id']
                         st.rerun()
