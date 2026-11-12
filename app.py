@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
-# CSS 스타일: 화면 여백 최적화
+# CSS 스타일: 버튼 가로 폭 축소 및 화면 여백 최적화
 st.markdown("""
     <style>
     .block-container {
@@ -23,6 +23,13 @@ st.markdown("""
         font-size: 18px !important;
         font-weight: 600 !important;
         padding: 6px 0px;
+    }
+    /* 완료, 수정, 삭제 버튼을 글씨 크기에 맞게 가로 폭 축소 */
+    div[data-testid="column"] button {
+        width: auto !important;
+        min-width: 60px !important;
+        padding: 0.25rem 0.5rem !important;
+        font-size: 14px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -119,8 +126,6 @@ if menu == "종합 현황":
 
 # --- 1. 업무 등록/관리 메뉴 ---
 elif menu == "업무 등록/관리":
-    # (주의) 메뉴 진입 시 강제로 날짜를 초기화하던 코드를 제거하여, 달력 클릭 날짜가 정상 유지되도록 함
-
     st.subheader("월별 업무 관리 현황")
     
     col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
@@ -162,8 +167,14 @@ elif menu == "업무 등록/관리":
             else:
                 current_d = date(selected_year, selected_month, day)
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
+                
+                # 요청하신 형식: 12일 1개면 (12일 (1건)), 없으면 날짜만
+                if len(day_tasks) > 0:
+                    btn_text = f"{day}일 ({len(day_tasks)}건)"
+                else:
+                    btn_text = f"{day}"
+
                 with w_cols[i]:
-                    btn_text = f"{day}일 (*)" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                         st.rerun()
@@ -189,7 +200,8 @@ elif menu == "업무 등록/관리":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 
-                cols_t = st.columns([0.80, 0.20])
+                # 업무 내용 카드 영역(0.88)을 넓히고 우측 버튼 영역(0.12)을 최소화
+                cols_t = st.columns([0.88, 0.12])
 
                 cat = task['category']
                 c_bg, c_fg = ("#fee2e2", "#991b1b") if cat == '고객제출' else ("#dbeafe", "#1e40af") if cat == '자료작성' else ("#fef08a", "#854d0e")
@@ -208,7 +220,7 @@ elif menu == "업무 등록/관리":
                 cols_t[0].markdown(card_html, unsafe_allow_html=True)
 
                 with cols_t[1]:
-                    comp_label = "완료 취소" if task['completed'] else "완료"
+                    comp_label = "완료취소" if task['completed'] else "완료"
                     if st.button(comp_label, key=f"comp_btn_{task['id']}", use_container_width=True):
                         task['completed'] = not task['completed']
                         task['completed_date'] = str(date.today()) if task['completed'] else None
