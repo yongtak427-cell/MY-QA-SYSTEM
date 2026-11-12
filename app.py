@@ -366,6 +366,12 @@ elif menu == "필드 클레임 현황":
         if len(df_raw.columns) > 63:
             df_raw['현상명'] = df_raw.iloc[:, 63].astype(str)
             
+        # 숫자형 데이터 컬럼 예외 처리 (문자열이 섞여 있어도 에러 안 나도록 숫자로 변환)
+        if '사용개월' in df_raw.columns:
+            df_raw['사용개월'] = pd.to_numeric(df_raw['사용개월'], errors='coerce').fillna(0)
+        if '주행거리Km' in df_raw.columns:
+            df_raw['주행거리Km'] = pd.to_numeric(df_raw['주행거리Km'], errors='coerce').fillna(0)
+            
         return df_raw
 
     if uploaded_file is not None:
@@ -382,7 +388,6 @@ elif menu == "필드 클레임 현황":
         try:
             sheet_url = st.session_state['gsheet_url']
             
-            # 구글 시트 URL을 CSV 다운로드 전용 주소로 안전하게 변환 (html5lib/lxml 불필요)
             if "pubhtml" in sheet_url:
                 export_url = sheet_url.replace("/pubhtml", "/pub?output=csv")
             elif "edit" in sheet_url:
