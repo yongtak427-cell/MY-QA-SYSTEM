@@ -10,7 +10,7 @@ import io
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
-# CSS 스타일: 화면 여백 최적화
+# CSS 스타일: 화면 여백 최적화 및 테이블 내 텍스트 줄바꿈/세로 정렬 허용
 st.markdown("""
     <style>
     .block-container {
@@ -30,6 +30,11 @@ st.markdown("""
         min-width: 60px !important;
         padding: 0.25rem 0.5rem !important;
         font-size: 14px !important;
+    }
+    /* st.dataframe 내부 텍스트 줄바꿈 및 상하 정렬 보장 */
+    div[data-testid="stDataFrame"] td {
+        white-space: pre-wrap !important;
+        vertical-align: middle !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -731,45 +736,15 @@ elif menu == "개선 활동 관리":
             st.markdown("---")
             st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
             
-            # HTML 테이블 렌더링을 통해 대책 내용의 줄바꿈(\n)이 위아래로 완벽히 반영되도록 처리 (applymap 대신 map 사용)
+            # 원래 리스트 표 형태(st.dataframe)를 유지하면서 
+            # Styler 설정을 통해 대책 내용의 \n 줄바꿈이 웹 표 안에서 위아래로 완벽히 반영되도록 처리
             display_imp = filtered_imp.drop(columns=['id'], errors='ignore').copy()
-            html_df = display_imp.astype(str).map(lambda x: x.replace('\n', '<br>') if pd.notna(x) else x)
-            table_html = html_df.to_html(escape=False, index=False)
+            styled_df = display_imp.style.set_properties(
+                subset=['대책 내용'], 
+                **{'white-space': 'pre-wrap', 'text-align': 'left'}
+            )
             
-            st.markdown(f"""
-                <style>
-                .custom-improve-table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    color: #e2e8f0;
-                    font-size: 14px;
-                    background-color: #0e1117;
-                }}
-                .custom-improve-table th {{
-                    background-color: #1e293b;
-                    color: white;
-                    padding: 10px 12px;
-                    border: 1px solid #334155;
-                    text-align: center;
-                    font-weight: bold;
-                }}
-                .custom-improve-table td {{
-                    padding: 10px 12px;
-                    border: 1px solid #334155;
-                    vertical-align: middle;
-                    line-height: 1.5;
-                }}
-                .custom-improve-table tr:nth-child(even) {{
-                    background-color: #161b22;
-                }}
-                .custom-improve-table tr:nth-child(odd) {{
-                    background-color: #0e1117;
-                }}
-                </style>
-                <div style="max-height: 600px; overflow-y: auto; border-radius: 8px; border: 1px solid #334155;">
-                {table_html.replace('<table', '<table class="custom-improve-table"')}
-                </div>
-            """, unsafe_allow_html=True)
+            st.dataframe(styled_df, use_container_width=True, height=500)
         else:
             st.info("개선 활동 데이터가 비어있습니다.")
 
