@@ -66,7 +66,7 @@ if 'editing_task_id' not in st.session_state: st.session_state['editing_task_id'
 
 # 확인 모달/상태 저장을 위한 세션
 if 'delete_confirm_id' not in st.session_state: st.session_state['delete_confirm_id'] = None
-if 'save_confirm_type' not in st.session_state: st.session_state['save_confirm_type'] = None # 'new' or 'update'
+if 'save_confirm_type' not in st.session_state: st.session_state['save_confirm_type'] = None
 if 'pending_form_data' not in st.session_state: st.session_state['pending_form_data'] = None
 
 # 클레임 데이터 세션 유지 보장
@@ -119,7 +119,7 @@ if menu == "종합 현황":
 
 # --- 1. 업무 등록/관리 메뉴 ---
 elif menu == "업무 등록/관리":
-    st.session_state['selected_date'] = date.today()
+    # (주의) 메뉴 진입 시 강제로 날짜를 초기화하던 코드를 제거하여, 달력 클릭 날짜가 정상 유지되도록 함
 
     st.subheader("월별 업무 관리 현황")
     
@@ -181,7 +181,6 @@ elif menu == "업무 등록/관리":
     col_left, col_right = st.columns(2)
 
     with col_left:
-        # 이모티콘 제거 및 지정 형식 적용
         st.markdown(f"### 업무현황 ({st.session_state['selected_date']})")
         target_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]
         if not target_tasks:
@@ -208,9 +207,7 @@ elif menu == "업무 등록/관리":
                 """
                 cols_t[0].markdown(card_html, unsafe_allow_html=True)
 
-                # 우측 영역: 완료, 수정, 삭제 버튼 (이모티콘 제거)
                 with cols_t[1]:
-                    # 완료 버튼 토글형식
                     comp_label = "완료 취소" if task['completed'] else "완료"
                     if st.button(comp_label, key=f"comp_btn_{task['id']}", use_container_width=True):
                         task['completed'] = not task['completed']
@@ -227,7 +224,6 @@ elif menu == "업무 등록/관리":
                         st.session_state['editing_task_id'] = None
                         st.rerun()
 
-                # 삭제 확인창 처리
                 if st.session_state['delete_confirm_id'] == task['id']:
                     st.warning(f"'{task['title']}' 업무를 정말 삭제하시겠습니까?")
                     d_col1, d_col2 = st.columns(2)
@@ -252,7 +248,6 @@ elif menu == "업무 등록/관리":
         else:
             st.markdown("### 신규 일정 등록")
 
-        # 저장 확인 모달이 떠 있을 경우 안내 및 확인/취소 처리
         if st.session_state['save_confirm_type'] is not None:
             action_name = "신규 등록" if st.session_state['save_confirm_type'] == 'new' else "수정"
             st.warning(f"정말 {action_name}하시겠습니까?")
@@ -306,7 +301,6 @@ elif menu == "업무 등록/관리":
                 f_memo = st.text_area("메모 및 상세 내용", value=editing_task['memo'] if editing_task else "")
                 
                 col_f1, col_f2 = st.columns(2)
-                # '일정 저장 및 달력 반영' -> '신규등록'으로 변경
                 submitted_new = col_f1.form_submit_button("신규등록", use_container_width=True)
                 submitted_update = col_f2.form_submit_button("내용 수정/등록", use_container_width=True)
 
@@ -422,7 +416,6 @@ elif menu == "필드 클레임 현황":
         with r3_c2: selected_countries = get_multiselect_filter("판매국가", "판매국가")
         with r3_c3: selected_plants = get_multiselect_filter("공장", "공장")
 
-        # 필터링 적용 로직
         filtered_df = df.copy()
         if selected_part_nos and '품번' in filtered_df.columns: filtered_df = filtered_df[filtered_df['품번'].astype(str).isin(selected_part_nos)]
         if selected_part_names and '부품명' in filtered_df.columns: filtered_df = filtered_df[filtered_df['부품명'].astype(str).isin(selected_part_names)]
@@ -470,7 +463,6 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 1. 상단 추이 분석 그래프 (Y축 0부터 시작 및 양쪽 축 스케일 동기화)
         st.markdown("### 1. 차종/기간별 클레임 추이 분석 (생산월 파란색 막대 [좌측 축] & 수리월 빨간색 꺾은선 [우측 축])")
         if not filtered_df.empty:
             chart_df = pd.DataFrame()
@@ -503,7 +495,6 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
         def plot_horizontal_bar(data_series, title_text, height=450, custom_order=None):
