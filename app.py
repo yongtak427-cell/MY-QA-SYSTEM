@@ -75,29 +75,26 @@ if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https
 
 # 사이드바 메뉴 (Menu List) - 첫 화면을 종합 현황으로 기본 설정
 st.sidebar.markdown("## 🧭 Menu List")
-menu_options = ["종합 현황", "업무 현황", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"]
+menu_options = ["종합 현황", "업무 등록/관리", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"]
 menu = st.sidebar.radio("메뉴 선택", menu_options, label_visibility="collapsed")
 
 st.markdown("---")
 
-# --- 0. 종합 현황 메뉴 (신규 추가) ---
+# --- 0. 종합 현황 메뉴 ---
 if menu == "종합 현황":
     st.subheader("📊 주간 업무 종합 현황 요약")
     st.markdown("이번 주(월요일 ~ 일요일 기준) 등록된 업무 현황 건수, 완료 건수, 미결 건수를 확인합니다.")
 
     tasks = st.session_state['tasks']
     today = date.today()
-    # 이번 주 월요일과 일요일 계산
     start_of_week = today - timedelta(days=today.weekday())
     end_of_week = start_of_week + timedelta(days=6)
 
-    # 주간 업무 필터링 (일정 날짜 기준)
     weekly_tasks = [t for t in tasks if start_of_week <= t['date'] <= end_of_week]
     total_weekly = len(weekly_tasks)
     completed_weekly = len([t for t in weekly_tasks if t['completed']])
     pending_weekly = total_weekly - completed_weekly
 
-    # 상단 지표 카드 표시
     col_s1, col_s2, col_s3 = st.columns(3)
     col_s1.metric("📌 이번 주 총 업무 건수", f"{total_weekly} 건")
     col_s2.metric("✅ 완료된 건수", f"{completed_weekly} 건")
@@ -119,9 +116,8 @@ if menu == "종합 현황":
         } for t in weekly_tasks])
         st.dataframe(weekly_df, use_container_width=True)
 
-# --- 1. 업무 현황 메뉴 ---
-elif menu == "업무 현황":
-    # 메뉴 진입 시 당일 날짜로 자동 세팅
+# --- 1. 업무 등록/관리 메뉴 ---
+elif menu == "업무 등록/관리":
     st.session_state['selected_date'] = date.today()
 
     st.subheader("📋 월별 캘린더 및 업무 일정 관리")
@@ -192,8 +188,8 @@ elif menu == "업무 현황":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 
-                # 폭 비율 조정: 완료 체크박스(0.15), 내용 카드(0.65), 수정/삭제 버튼 영역(0.2)
-                cols_t = st.columns([0.15, 0.65, 0.2])
+                # 폭 비율 조정: 완료 체크박스(0.1), 내용 카드(0.75), 수정/삭제 버튼 영역(0.15) -> 버튼 영역 최소화 및 카드 확대
+                cols_t = st.columns([0.1, 0.75, 0.15])
                 
                 is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                 if is_checked != task['completed']:
@@ -218,7 +214,7 @@ elif menu == "업무 현황":
                 """
                 cols_t[1].markdown(card_html, unsafe_allow_html=True)
 
-                # 수정/삭제 버튼을 우측에 위/아래로 배치
+                # 수정/삭제 버튼을 우측에 위/아래로 배치 (최소 공간)
                 with cols_t[2]:
                     if st.button("✏️ 수정", key=f"edit_btn_{task['id']}", use_container_width=True):
                         st.session_state['editing_task_id'] = task['id']
