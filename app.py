@@ -5,6 +5,7 @@ import calendar
 import os
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import io
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
@@ -79,7 +80,7 @@ if 'pending_form_data' not in st.session_state: st.session_state['pending_form_d
 # 클레임 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
-if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/..."
+if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
@@ -168,7 +169,6 @@ elif menu == "업무 등록/관리":
                 current_d = date(selected_year, selected_month, day)
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 
-                # 요청하신 형식: 12일 1개면 (12일 (1건)), 없으면 날짜만
                 if len(day_tasks) > 0:
                     btn_text = f"{day}일 ({len(day_tasks)}건)"
                 else:
@@ -200,7 +200,6 @@ elif menu == "업무 등록/관리":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 
-                # 업무 내용 카드 영역(0.88)을 넓히고 우측 버튼 영역(0.12)을 최소화
                 cols_t = st.columns([0.88, 0.12])
 
                 cat = task['category']
@@ -382,12 +381,40 @@ elif menu == "필드 클레임 현황":
     if load_gsheet_btn:
         try:
             sheet_url = st.session_state['gsheet_url']
-            export_url = sheet_url.split('/edit')[0] + '/export?format=csv' if "edit" in sheet_url else sheet_url
-            raw_df = pd.read_csv(export_url)
-            raw_df = process_raw_dataframe(raw_df)
-            st.session_state['claim_df'] = raw_df
-            st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
-            st.rerun()
+            
+            # pubhtml 주소를 안전하게 엑셀/HTML 파싱 또는 CSV 내보내기 주소로 자동 변환
+            if "pubhtml" in sheet_url:
+                base_url = sheet_url.split('/pubhtml')[0]
+                export_url = base_url + '/export?format=csv'
+            elif "edit" in sheet_url:
+                export_url = sheet_url.split('/edit')[0] + '/export?format=csv'
+            else:
+                export_url = sheet_url
+
+            # 오류 방지를 위해 HTML 테이블 파싱 방식 시도 후 실패시 CSV 읽기 시도
+            try:
+                if "pubhtml" in sheet_url:
+                    dfs = pd.read_html(sheet_url)
+                    raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
+                else:
+                    raw_df = pd.read_csv(export_url)
+            except Exception:
+                # 대체 수단: read_html 직접 시도
+                dfs = pd.read_html(sheet_url)
+                raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
+
+            if not raw_df.empty:
+                # 만약 첫 번째 행이 헤더가 아니라 데이터인 경우 처리
+                if 'No.' not in str(raw_df.columns):
+                    raw_df.columns = raw_df.iloc[0]
+                    raw_df = raw_df[1:].reset_index(drop=True)
+
+                raw_df = process_raw_dataframe(raw_df)
+                st.session_state['claim_df'] = raw_df
+                st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
+                st.rerun()
+            else:
+                st.error("구글 시트에서 데이터를 가져오지 못했습니다. 시트 주소와 권한을 확인해주세요.")
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
