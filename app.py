@@ -83,7 +83,7 @@ if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 
 # 사이드바 메뉴 (Menu List)
-st.sidebar.markdown("## 🧭 Menu List")
+st.sidebar.markdown("## Menu List")
 menu_options = ["종합 현황", "업무 등록/관리", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"]
 menu = st.sidebar.radio("메뉴 선택", menu_options, label_visibility="collapsed")
 
@@ -382,28 +382,15 @@ elif menu == "필드 클레임 현황":
         try:
             sheet_url = st.session_state['gsheet_url']
             
-            # pubhtml 주소를 안전하게 엑셀 파싱 또는 CSV 내보내기 주소로 자동 변환
+            # 구글 시트 URL을 CSV 다운로드 전용 주소로 안전하게 변환 (html5lib/lxml 불필요)
             if "pubhtml" in sheet_url:
-                base_url = sheet_url.split('/pubhtml')[0]
-                export_url = base_url + '/export?format=csv'
+                export_url = sheet_url.replace("/pubhtml", "/pub?output=csv")
             elif "edit" in sheet_url:
                 export_url = sheet_url.split('/edit')[0] + '/export?format=csv'
             else:
                 export_url = sheet_url
 
-            raw_df = pd.DataFrame()
-            try:
-                # 1차 시도: CSV 내보내기 주소로 읽기 (가장 안정적)
-                raw_df = pd.read_csv(export_url)
-            except Exception:
-                try:
-                    # 2차 시도: HTML 파서 기본 엔진(html.parser) 사용 (lxml 불필요)
-                    dfs = pd.read_html(sheet_url, flavor='bs4')
-                    if not dfs:
-                        dfs = pd.read_html(sheet_url)
-                    raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
-                except Exception as e2:
-                    raise Exception(f"데이터를 읽어오지 못했습니다. URL과 공유 권한을 확인해주세요. (상세: {e2})")
+            raw_df = pd.read_csv(export_url)
 
             if not raw_df.empty:
                 if 'No.' not in str(raw_df.columns):
@@ -415,7 +402,7 @@ elif menu == "필드 클레임 현황":
                 st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
                 st.rerun()
             else:
-                st.error("구글 시트 데이터가 비어있거나 읽을 수 없습니다.")
+                st.error("구글 시트 데이터가 비어있습니다.")
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
