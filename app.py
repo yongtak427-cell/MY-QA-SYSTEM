@@ -24,10 +24,6 @@ st.markdown("""
         font-weight: 600 !important;
         padding: 6px 0px;
     }
-    div.stCheckbox label p {
-        font-size: 16px !important;
-        font-weight: bold !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,12 +64,17 @@ if 'cal_month' not in st.session_state: st.session_state['cal_month'] = datetime
 if 'selected_date' not in st.session_state: st.session_state['selected_date'] = date.today()
 if 'editing_task_id' not in st.session_state: st.session_state['editing_task_id'] = None
 
+# 확인 모달/상태 저장을 위한 세션
+if 'delete_confirm_id' not in st.session_state: st.session_state['delete_confirm_id'] = None
+if 'save_confirm_type' not in st.session_state: st.session_state['save_confirm_type'] = None # 'new' or 'update'
+if 'pending_form_data' not in st.session_state: st.session_state['pending_form_data'] = None
+
 # 클레임 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/..."
 
-# 사이드바 메뉴 (Menu List) - 첫 화면을 종합 현황으로 기본 설정
+# 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## 🧭 Menu List")
 menu_options = ["종합 현황", "업무 등록/관리", "필드 클레임 현황", "개선 활동 관리", "고객사 클레임 비용 분석", "구글 시트 연동 설정"]
 menu = st.sidebar.radio("메뉴 선택", menu_options, label_visibility="collapsed")
@@ -82,7 +83,7 @@ st.markdown("---")
 
 # --- 0. 종합 현황 메뉴 ---
 if menu == "종합 현황":
-    st.subheader("📊 주간 업무 종합 현황 요약")
+    st.subheader("주간 업무 종합 현황 요약")
     st.markdown("이번 주(월요일 ~ 일요일 기준) 등록된 업무 현황 건수, 완료 건수, 미결 건수를 확인합니다.")
 
     tasks = st.session_state['tasks']
@@ -96,12 +97,12 @@ if menu == "종합 현황":
     pending_weekly = total_weekly - completed_weekly
 
     col_s1, col_s2, col_s3 = st.columns(3)
-    col_s1.metric("📌 이번 주 총 업무 건수", f"{total_weekly} 건")
-    col_s2.metric("✅ 완료된 건수", f"{completed_weekly} 건")
-    col_s3.metric("⏳ 미결(진행중) 건수", f"{pending_weekly} 건")
+    col_s1.metric("이번 주 총 업무 건수", f"{total_weekly} 건")
+    col_s2.metric("완료된 건수", f"{completed_weekly} 건")
+    col_s3.metric("미결(진행중) 건수", f"{pending_weekly} 건")
 
     st.markdown("---")
-    st.markdown(f"#### 📅 이번 주 ({start_of_week} ~ {end_of_week}) 상세 업무 리스트")
+    st.markdown(f"이번 주 ({start_of_week} ~ {end_of_week}) 상세 업무 리스트")
     if not weekly_tasks:
         st.info("이번 주에 등록된 업무가 없습니다.")
     else:
@@ -120,7 +121,7 @@ if menu == "종합 현황":
 elif menu == "업무 등록/관리":
     st.session_state['selected_date'] = date.today()
 
-    st.subheader("📋 월별 캘린더 및 업무 일정 관리")
+    st.subheader("월별 업무 관리 현황")
     
     col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
     with col_m1:
@@ -162,7 +163,7 @@ elif menu == "업무 등록/관리":
                 current_d = date(selected_year, selected_month, day)
                 day_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(current_d)]
                 with w_cols[i]:
-                    btn_text = f"📌 {day}일" if day_tasks else f"{day}"
+                    btn_text = f"{day}일 (*)" if day_tasks else f"{day}"
                     if st.button(btn_text, key=f"cal_btn_{selected_year}_{selected_month}_{day}", use_container_width=True):
                         st.session_state['selected_date'] = current_d
                         st.rerun()
@@ -180,7 +181,8 @@ elif menu == "업무 등록/관리":
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown(f"### 📌 선택한 날짜: {st.session_state['selected_date']} 업무 현황")
+        # 이모티콘 제거 및 지정 형식 적용
+        st.markdown(f"### 업무현황 ({st.session_state['selected_date']})")
         target_tasks = [t for t in st.session_state['tasks'] if str(t['date']) == str(st.session_state['selected_date'])]
         if not target_tasks:
             st.info("선택된 날짜에 등록된 업무가 없습니다.")
@@ -188,14 +190,12 @@ elif menu == "업무 등록/관리":
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
                 
-                # 폭 비율 조정: 내용 카드(0.85), 우측 버튼/체크박스 영역(0.15)
-                cols_t = st.columns([0.85, 0.15])
+                cols_t = st.columns([0.80, 0.20])
 
                 cat = task['category']
                 c_bg, c_fg = ("#fee2e2", "#991b1b") if cat == '고객제출' else ("#dbeafe", "#1e40af") if cat == '자료작성' else ("#fef08a", "#854d0e")
                 update_tag = f" | <span style='color: #f59e0b; font-size: 12px;'>수정일자 : {task['updated_date']}</span>" if task.get('updated_date') else ""
 
-                # white-space: pre-wrap 적용하여 작성한 엔터/줄바꿈 형식 그대로 유지
                 card_html = f"""
                     <div style='{box_style}'>
                         <span style='font-size: 18px; font-weight: bold; color: white;'>{task['title']}</span> 
@@ -208,71 +208,129 @@ elif menu == "업무 등록/관리":
                 """
                 cols_t[0].markdown(card_html, unsafe_allow_html=True)
 
-                # 우측 영역: 완료 체크박스 -> 수정 버튼 -> 삭제 버튼 위에서 아래로 배치
+                # 우측 영역: 완료, 수정, 삭제 버튼 (이모티콘 제거)
                 with cols_t[1]:
-                    is_checked = st.checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
-                    if is_checked != task['completed']:
-                        task['completed'] = is_checked
-                        task['completed_date'] = str(date.today()) if is_checked else None
+                    # 완료 버튼 토글형식
+                    comp_label = "완료 취소" if task['completed'] else "완료"
+                    if st.button(comp_label, key=f"comp_btn_{task['id']}", use_container_width=True):
+                        task['completed'] = not task['completed']
+                        task['completed_date'] = str(date.today()) if task['completed'] else None
                         st.rerun()
 
-                    if st.button("✏️ 수정", key=f"edit_btn_{task['id']}", use_container_width=True):
+                    if st.button("수정", key=f"edit_btn_{task['id']}", use_container_width=True):
                         st.session_state['editing_task_id'] = task['id']
+                        st.session_state['delete_confirm_id'] = None
                         st.rerun()
-                    if st.button("🗑️ 삭제", key=f"del_btn_{task['id']}", use_container_width=True):
+
+                    if st.button("삭제", key=f"del_btn_{task['id']}", use_container_width=True):
+                        st.session_state['delete_confirm_id'] = task['id']
+                        st.session_state['editing_task_id'] = None
+                        st.rerun()
+
+                # 삭제 확인창 처리
+                if st.session_state['delete_confirm_id'] == task['id']:
+                    st.warning(f"'{task['title']}' 업무를 정말 삭제하시겠습니까?")
+                    d_col1, d_col2 = st.columns(2)
+                    if d_col1.button("삭제", key=f"confirm_del_{task['id']}", use_container_width=True):
                         st.session_state['tasks'] = [t for t in st.session_state['tasks'] if t['id'] != task['id']]
                         if st.session_state['editing_task_id'] == task['id']:
                             st.session_state['editing_task_id'] = None
-                        st.success("업무가 삭제되었습니다.")
+                        st.session_state['delete_confirm_id'] = None
+                        st.success("삭제되었습니다.")
+                        st.rerun()
+                    if d_col2.button("취소", key=f"cancel_del_{task['id']}", use_container_width=True):
+                        st.session_state['delete_confirm_id'] = None
                         st.rerun()
 
     with col_right:
         editing_task = next((t for t in st.session_state['tasks'] if t['id'] == st.session_state['editing_task_id']), None)
         if editing_task:
-            st.markdown(f"### ✏️ 기존 업무 내용 수정 (ID: {editing_task['id']})")
-            if st.button("❌ 수정 취소하기"):
+            st.markdown(f"### 기존 업무 내용 수정 (ID: {editing_task['id']})")
+            if st.button("수정 취소하기"):
                 st.session_state['editing_task_id'] = None
                 st.rerun()
         else:
-            st.markdown("### ✍️ 신규 일정 등록")
+            st.markdown("### 신규 일정 등록")
 
-        with st.form("task_manage_form"):
-            f_title = st.text_input("업무 제목", value=editing_task['title'] if editing_task else "")
-            f_date = st.date_input("일정 날짜", value=editing_task['date'] if editing_task else st.session_state['selected_date'])
-            f_deadline = st.date_input("마감 기한", value=editing_task['deadline'] if editing_task else date.today())
-            categories = ["고객제출", "업체접수", "자료작성"]
-            f_category = st.selectbox("카테고리 선택", categories, index=categories.index(editing_task['category']) if editing_task and editing_task['category'] in categories else 0)
-            f_requester = st.text_input("요청자", value=editing_task['requester'] if editing_task else "")
-            f_memo = st.text_area("메모 및 상세 내용", value=editing_task['memo'] if editing_task else "")
-            
-            col_f1, col_f2 = st.columns(2)
-            submitted_new = col_f1.form_submit_button("일정 저장 및 달력 반영", use_container_width=True)
-            submitted_update = col_f2.form_submit_button("내용 수정/등록", use_container_width=True)
-
-            if submitted_new and not editing_task:
-                if f_title.strip():
+        # 저장 확인 모달이 떠 있을 경우 안내 및 확인/취소 처리
+        if st.session_state['save_confirm_type'] is not None:
+            action_name = "신규 등록" if st.session_state['save_confirm_type'] == 'new' else "수정"
+            st.warning(f"정말 {action_name}하시겠습니까?")
+            c_col1, c_col2 = st.columns(2)
+            if c_col1.button("등록", use_container_width=True):
+                data = st.session_state['pending_form_data']
+                if st.session_state['save_confirm_type'] == 'new':
                     st.session_state['tasks'].append({
-                        "id": len(st.session_state['tasks']) + 1, "title": f_title, "date": f_date,
-                        "deadline": f_deadline, "memo": f_memo, "requester": f_requester,
-                        "category": f_category, "completed": False, "completed_date": None, "updated_date": None
+                        "id": len(st.session_state['tasks']) + 1,
+                        "title": data['title'],
+                        "date": data['date'],
+                        "deadline": data['deadline'],
+                        "memo": data['memo'],
+                        "requester": data['requester'],
+                        "category": data['category'],
+                        "completed": False,
+                        "completed_date": None,
+                        "updated_date": None
                     })
-                    st.success("일정이 저장되었습니다!")
-                    st.rerun()
+                    st.success("신규 등록되었습니다!")
+                else:
+                    target_t = next((t for t in st.session_state['tasks'] if t['id'] == st.session_state['editing_task_id']), None)
+                    if target_t:
+                        target_t.update({
+                            "title": data['title'],
+                            "date": data['date'],
+                            "deadline": data['deadline'],
+                            "category": data['category'],
+                            "requester": data['requester'],
+                            "memo": data['memo'],
+                            "updated_date": datetime.today().strftime('%y-%m-%d')
+                        })
+                        st.session_state['editing_task_id'] = None
+                        st.success("수정되었습니다!")
+                st.session_state['save_confirm_type'] = None
+                st.session_state['pending_form_data'] = None
+                st.rerun()
 
-            if submitted_update and editing_task:
-                if f_title.strip():
-                    editing_task.update({
-                        "title": f_title, "date": f_date, "deadline": f_deadline,
-                        "category": f_category, "requester": f_requester, "memo": f_memo,
-                        "updated_date": datetime.today().strftime('%y-%m-%d')
-                    })
-                    st.session_state['editing_task_id'] = None
-                    st.success("수정되었습니다!")
-                    st.rerun()
+            if c_col2.button("취소", use_container_width=True):
+                st.session_state['save_confirm_type'] = None
+                st.session_state['pending_form_data'] = None
+                st.rerun()
+        else:
+            with st.form("task_manage_form"):
+                f_title = st.text_input("업무 제목", value=editing_task['title'] if editing_task else "")
+                f_date = st.date_input("일정 날짜", value=editing_task['date'] if editing_task else st.session_state['selected_date'])
+                f_deadline = st.date_input("마감 기한", value=editing_task['deadline'] if editing_task else date.today())
+                categories = ["고객제출", "업체접수", "자료작성"]
+                f_category = st.selectbox("카테고리 선택", categories, index=categories.index(editing_task['category']) if editing_task and editing_task['category'] in categories else 0)
+                f_requester = st.text_input("요청자", value=editing_task['requester'] if editing_task else "")
+                f_memo = st.text_area("메모 및 상세 내용", value=editing_task['memo'] if editing_task else "")
+                
+                col_f1, col_f2 = st.columns(2)
+                # '일정 저장 및 달력 반영' -> '신규등록'으로 변경
+                submitted_new = col_f1.form_submit_button("신규등록", use_container_width=True)
+                submitted_update = col_f2.form_submit_button("내용 수정/등록", use_container_width=True)
+
+                if submitted_new and not editing_task:
+                    if f_title.strip():
+                        st.session_state['pending_form_data'] = {
+                            "title": f_title, "date": f_date, "deadline": f_deadline,
+                            "category": f_category, "requester": f_requester, "memo": f_memo
+                        }
+                        st.session_state['save_confirm_type'] = 'new'
+                        st.rerun()
+
+                if submitted_update and editing_task:
+                    if f_title.strip():
+                        st.session_state['pending_form_data'] = {
+                            "title": f_title, "date": f_date, "deadline": f_deadline,
+                            "category": f_category, "requester": f_requester, "memo": f_memo
+                        }
+                        st.session_state['save_confirm_type'] = 'update'
+                        st.rerun()
 
 # --- 2. 필드 클레임 현황 메뉴 ---
 elif menu == "필드 클레임 현황":
-    st.subheader("📈 클레임 RAW DATA 분석 및 시각화 대시보드")
+    st.subheader("클레임 RAW DATA 분석 및 시각화 대시보드")
     st.markdown("구글 시트에 등록된 데이터를 불러오거나 엑셀 파일을 업로드하여 클레임 분석을 진행하세요.")
 
     col_up1, col_up2 = st.columns([2, 1])
@@ -280,7 +338,7 @@ elif menu == "필드 클레임 현황":
         uploaded_file = st.file_uploader("클레임 RAW DATA 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"])
     with col_up2:
         st.markdown("<br>", unsafe_allow_html=True)
-        load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
+        load_gsheet_btn = st.button("구글 시트 데이터 자동 불러오기", use_container_width=True)
 
     def process_raw_dataframe(df_raw):
         cols = list(df_raw.columns)
@@ -331,7 +389,7 @@ elif menu == "필드 클레임 현황":
 
     if not df.empty:
         st.markdown("---")
-        st.markdown("#### 🔍 클레임 조회 (직접 검색 및 다중 선택 가능)")
+        st.markdown("클레임 조회 (직접 검색 및 다중 선택 가능)")
 
         def get_multiselect_filter(label, col_name, custom_options=None):
             if col_name in df.columns:
@@ -433,7 +491,6 @@ elif menu == "필드 클레임 현황":
                     fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['수리건수'], name="수리월 클레임 (꺾은선)", line=dict(color="#ef4444", width=3), mode='lines+markers'), secondary_y=True)
 
                 fig.update_layout(template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", height=450, margin=dict(l=40, r=40, t=30, b=40), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                # Y축 시작점을 0으로 고정
                 fig.update_yaxes(title_text="<b>생산건수 (좌측)</b>", secondary_y=False, rangemode="tozero", showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
                 fig.update_yaxes(title_text="<b>수리건수 (우측)</b>", secondary_y=True, rangemode="tozero", showgrid=False)
                 fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
@@ -446,7 +503,7 @@ elif menu == "필드 클레임 현황":
 
         st.markdown("---")
 
-        # 2. 하단 다각도 분석 (수평 막대 그래프: Y축 작은 수치부터 위로 커지는 순서로 고정)
+        # 2. 하단 다각도 분석
         st.markdown("### 2. 다각도 클레임 현황 분석 (수평 막대 그래프)")
         
         def plot_horizontal_bar(data_series, title_text, height=450, custom_order=None):
@@ -485,7 +542,7 @@ elif menu == "필드 클레임 현황":
         hb_col1, hb_col2 = st.columns(2)
 
         with hb_col1:
-            st.markdown("##### 📊 현상명별 클레임 현황 (누수 / 소음 / 기타)")
+            st.markdown("현상명별 클레임 현황 (누수 / 소음 / 기타)")
             if '현상명' in filtered_df.columns:
                 leak_count = filtered_df['현상명'].astype(str).str.contains("누수", case=False, na=False).sum()
                 noise_count = filtered_df['현상명'].astype(str).str.contains("소음|이음", case=False, na=False).sum()
@@ -495,7 +552,7 @@ elif menu == "필드 클레임 현황":
             else:
                 st.info("데이터에 '현상명' 컬럼이 존재하지 않습니다.")
 
-            st.markdown("##### 📊 주행거리별 클레임 현황")
+            st.markdown("주행거리별 클레임 현황")
             if '주행거리Km' in filtered_df.columns:
                 filtered_df['주행거리_구간'] = pd.cut(filtered_df['주행거리Km'], bins=[0, 5000, 10000, 30000, 50000, 70000, 100000, 999999], labels=['~5000', '5001~10000', '10001~30000', '30001~50000', '50001~70000', '70001~100000', '100000이상'])
                 mile_grouped = filtered_df.groupby('주행거리_구간', observed=False).size()
@@ -505,7 +562,7 @@ elif menu == "필드 클레임 현황":
                 st.info("데이터에 '주행거리Km' 컬럼이 존재하지 않습니다.")
 
         with hb_col2:
-            st.markdown("##### 📊 사용개월별 클레임 현황")
+            st.markdown("사용개월별 클레임 현황")
             if '사용개월' in filtered_df.columns:
                 bins = [-1, 3, 6, 9, 12, 24, 36, 48, 60, 999999]
                 labels = ['3개월 (0~3)', '6개월 (4~6)', '9개월 (7~9)', '12개월 (10~12)', '24개월 (13~24)', '36개월 (25~36)', '48개월 (37~48)', '60개월 (49~60)', '60개월 이상']
@@ -518,7 +575,7 @@ elif menu == "필드 클레임 현황":
             else:
                 st.info("데이터에 '사용개월' 컬럼이 존재하지 않습니다.")
 
-            st.markdown("##### 📊 차종별 클레임 현황 (상위 항목)")
+            st.markdown("차종별 클레임 현황 (상위 항목)")
             if '차종' in filtered_df.columns:
                 car_grouped = filtered_df.groupby('차종').size().nlargest(15).sort_values(ascending=True)
                 plot_horizontal_bar(car_grouped, "", height=380)
@@ -526,7 +583,7 @@ elif menu == "필드 클레임 현황":
                 st.info("데이터에 '차종' 컬럼이 존재하지 않습니다.")
 
         st.markdown("---")
-        st.markdown(f"##### 📋 선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
+        st.markdown(f"선택된 조건의 상세 RAW DATA 테이블 조회 (총 {len(filtered_df)}건)")
         st.dataframe(filtered_df, use_container_width=True)
     else:
         st.info("분석할 클레임 엑셀 파일을 업로드하거나, 상단의 '구글 시트 데이터 자동 불러오기' 버튼을 눌러주세요.")
