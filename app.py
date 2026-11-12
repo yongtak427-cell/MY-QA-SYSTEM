@@ -149,7 +149,10 @@ if menu == "업무 현황":
         else:
             for task in target_tasks:
                 box_style = "border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; background-color: #0e1117;"
-                cols_t = st.columns([0.15, 0.65, 0.2])
+                
+                # 버튼 배치: 완료 체크박스, 수정 버튼, 삭제 버튼
+                cols_t = st.columns([0.15, 0.45, 0.2, 0.2])
+                
                 is_checked = cols_t[0].checkbox("완료", value=task['completed'], key=f"chk_{task['id']}")
                 if is_checked != task['completed']:
                     task['completed'] = is_checked
@@ -158,6 +161,14 @@ if menu == "업무 현황":
 
                 if cols_t[2].button("✏️ 수정", key=f"edit_btn_{task['id']}"):
                     st.session_state['editing_task_id'] = task['id']
+                    st.rerun()
+
+                # 🗑️ 삭제 버튼 추가 (클릭 시 세션 state에서 해당 task 제거 후 새로고침)
+                if cols_t[3].button("🗑️ 삭제", key=f"del_btn_{task['id']}"):
+                    st.session_state['tasks'] = [t for t in st.session_state['tasks'] if t['id'] != task['id']]
+                    if st.session_state['editing_task_id'] == task['id']:
+                        st.session_state['editing_task_id'] = None
+                    st.success("업무가 삭제되었습니다.")
                     st.rerun()
 
                 cat = task['category']
@@ -233,18 +244,13 @@ elif menu == "필드 클레임 현황":
         st.markdown("<br>", unsafe_allow_html=True)
         load_gsheet_btn = st.button("🔄 구글 시트 데이터 자동 불러오기", use_container_width=True)
 
-    # 엑셀 파일의 컬럼 중복 및 BL열(인덱스 63) 데이터를 안전하게 '현상명'으로 지정하는 함수
     def process_raw_dataframe(df_raw):
-        # 중복된 컬럼명 방지 처리 (예: 현상명, 현상명.1 등)
         cols = list(df_raw.columns)
-        
-        # BL열(인덱스 63)이 존재하면 해당 열을 명확하게 '현상명'으로 지정 (기존 7번 인덱스의 '현상명'과 충돌하지 않도록 리스트 직접 조작)
         if len(cols) > 63:
             cols[63] = '현상명'
         if len(cols) > 59:
             cols[59] = '현상상세'
             
-        # 중복 컬럼명이 있을 경우 구분자 부여 (.1, .2 등)
         seen = {}
         new_cols = []
         for c in cols:
@@ -256,7 +262,6 @@ elif menu == "필드 클레임 현황":
                 new_cols.append(c)
         df_raw.columns = new_cols
         
-        # 확실하게 BL열(인덱스 63) 값을 분석용 '현상명'으로 재할당
         if len(df_raw.columns) > 63:
             df_raw['현상명'] = df_raw.iloc[:, 63].astype(str)
             
@@ -296,7 +301,6 @@ elif menu == "필드 클레임 현황":
                 return st.multiselect(f"{label}", options, key=f"filter_{col_name}")
             return []
 
-        # 엑셀 BL열 기반 '현상명'은 '누수', '소음', '기타'만 선택 가능하도록 제한
         phenomenon_options = ["누수", "소음", "기타"]
 
         r1_c1, r1_c2, r1_c3, r1_c4, r1_c5 = st.columns(5)
