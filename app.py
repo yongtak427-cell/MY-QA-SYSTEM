@@ -84,7 +84,11 @@ if 'pending_form_data' not in st.session_state: st.session_state['pending_form_d
 # 클레임 데이터 및 개선활동 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
+if 'improve_uploaded_file_name' not in st.session_state: st.session_state['improve_uploaded_file_name'] = None
+
+# 구글 시트 URL 세션 설정
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
+if 'improve_gsheet_url' not in st.session_state: st.session_state['improve_gsheet_url'] = ""
 
 # 첨부된 엑셀 전체 데이터 임베딩 초기화 (줄바꿈 반영)
 if 'improve_df' not in st.session_state:
@@ -693,7 +697,54 @@ elif menu == "필드 클레임 현황":
 # --- 3. 개선 활동 관리 메뉴 ---
 elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 관리")
-    st.markdown("내장된 엑셀 데이터 기반으로 대상, 품명, 차종, 현상, 해당 품목, 고객사명 조건을 선택하여 조회하고 신규 등록 및 수정할 수 있습니다.")
+    st.markdown("구글 시트 데이터를 연동하거나 엑셀 파일을 업로드하여 개선 내역을 조회, 검색, 수정할 수 있습니다.")
+
+    # [추가] 구글 시트 연동 및 파일 업로드 UI 영역
+    col_i_up1, col_i_up2 = st.columns([2, 1])
+    with col_i_up1:
+        improve_uploaded_file = st.file_uploader("개선 활동 엑셀(.xlsx, .csv) 파일 업로드", type=["xlsx", "csv"], key="improve_file_up")
+    with col_i_up2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        load_improve_gsheet_btn = st.button("개선 활동 구글 시트 자동 불러오기", use_container_width=True)
+
+    if improve_uploaded_file is not None:
+        if st.session_state['improve_uploaded_file_name'] != improve_uploaded_file.name:
+            try:
+                raw_imp_df = pd.read_csv(improve_uploaded_file) if improve_uploaded_file.name.endswith('.csv') else pd.read_excel(improve_uploaded_file, sheet_name=0)
+                if 'id' not in raw_imp_df.columns:
+                    raw_imp_df.insert(0, 'id', range(1, len(raw_imp_df) + 1))
+                st.session_state['improve_df'] = raw_imp_df
+                st.session_state['improve_uploaded_file_name'] = improve_uploaded_file.name
+                st.success("엑셀 파일이 성공적으로 업로드 및 반영되었습니다!")
+            except Exception as e:
+                st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+
+    if load_improve_gsheet_btn:
+        try:
+            imp_sheet_url = st.session_state['improve_gsheet_url']
+            if not imp_sheet_url:
+                st.warning("'구글 시트 연동 설정' 메뉴에서 개선 활동 구글 시트 URL을 먼저 입력해주세요.")
+            else:
+                if "pubhtml" in imp_sheet_url:
+                    export_url = imp_sheet_url.replace("/pubhtml", "/pub?output=csv")
+                elif "edit" in imp_sheet_url:
+                    export_url = imp_sheet_url.split('/edit')[0] + '/export?format=csv'
+                else:
+                    export_url = imp_sheet_url
+
+                raw_imp_df = pd.read_csv(export_url)
+                if not raw_imp_df.empty:
+                    if 'id' not in raw_imp_df.columns:
+                        raw_imp_df.insert(0, 'id', range(1, len(raw_imp_df) + 1))
+                    st.session_state['improve_df'] = raw_imp_df
+                    st.success("구글 시트에서 개선 활동 데이터를 성공적으로 불러왔습니다!")
+                    st.rerun()
+                else:
+                    st.error("구글 시트 데이터가 비어있습니다.")
+        except Exception as e:
+            st.error(f"구글 시트 연동 중 오류 발생: {e}")
+
+    st.markdown("---")
 
     imp_df = st.session_state['improve_df']
 
@@ -736,8 +787,6 @@ elif menu == "개선 활동 관리":
             st.markdown("---")
             st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
             
-            # 원래 리스트 표 형태(st.dataframe)를 유지하면서 
-            # Styler 설정을 통해 대책 내용의 \n 줄바꿈이 웹 표 안에서 위아래로 완벽히 반영되도록 처리
             display_imp = filtered_imp.drop(columns=['id'], errors='ignore').copy()
             styled_df = display_imp.style.set_properties(
                 subset=['대책 내용'], 
@@ -869,8 +918,12 @@ elif menu == "고객사 클레임 비용 분석":
 
 # --- 5. 구글 시트 연동 설정 메뉴 ---
 elif menu == "구글 시트 연동 설정":
-    st.subheader("구글 드라이브 & 스프레드시트 연동")
+    st.subheader("구글 드라이브 & 스프레드시트 연동 설정")
+    
     gsheet_input = st.text_input("필드 클레임 현황 구글 시트 URL", st.session_state['gsheet_url'])
+    improve_gsheet_input = st.text_input("개선 활동 관리 구글 시트 URL", st.session_state['improve_gsheet_url'], placeholder="웹에 게시된 구글 시트 CSV 내보내기/공유 링크 입력")
+    
     if st.button("연동 정보 저장"):
         st.session_state['gsheet_url'] = gsheet_input
-        st.success("구글 클라우드 스프레드시트 URL이 성공적으로 저장되었습니다! 이제 '필드 클레임 현황' 메뉴에서 '구글 시트 데이터 자동 불러오기'를 사용할 수 있습니다.")
+        st.session_state['improve_gsheet_url'] = improve_gsheet_input
+        st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장되었습니다!")
