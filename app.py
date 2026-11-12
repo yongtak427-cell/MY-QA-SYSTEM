@@ -10,7 +10,7 @@ import io
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
 
-# CSS 스타일: 버튼 가로 폭 축소 및 화면 여백 최적화
+# CSS 스타일: 대책 내용 컬럼 줄바꿈 및 화면 여백 최적화
 st.markdown("""
     <style>
     .block-container {
@@ -25,7 +25,11 @@ st.markdown("""
         font-weight: 600 !important;
         padding: 6px 0px;
     }
-    /* 완료, 수정, 삭제 버튼을 글씨 크기에 맞게 가로 폭 축소 */
+    /* 테이블 내 텍스트 줄바꿈 허용 */
+    div[data-testid="stDataFrame"] td {
+        white-space: pre-wrap !important;
+        vertical-align: middle !important;
+    }
     div[data-testid="column"] button {
         width: auto !important;
         min-width: 60px !important;
@@ -82,7 +86,7 @@ if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFra
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 
-# 첨부된 엑셀 전체 데이터 임베딩 초기화
+# 첨부된 엑셀 전체 데이터 임베딩 초기화 (고유 ID 추가)
 if 'improve_df' not in st.session_state:
     raw_data = [
         {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '누수/소음', '대책 내용': 'M/SEAL M/R 재질 환원(ES5 ▶ ES4)', '해당 품목': '25100-3CAC0', '고객사명': '-', '적용일': '2016-06-27', '비 고': ''},
@@ -148,7 +152,12 @@ if 'improve_df' not in st.session_state:
         {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·설계 변경\n  └ CASE 공차 변경 + BR’G 사양 변경 + 호스/클립 부품 추가', '해당 품목': '25100-85821', '고객사명': 'HMC', '적용일': '2025-05-13', '비 고': 'RTD 사양'},
         {'대상': '상용', '품명': '워터펌프', '차종': '4D34', '현상': '누수', '대책 내용': '설계 변경\n  └ BODY 강성보강 + BR’G 공급업체 변경(JTEKT)', '해당 품목': '25100-45005', '고객사명': 'HMC', '적용일': '2023-02-07', '비 고': 'N-ENG'}
     ]
-    st.session_state['improve_df'] = pd.DataFrame(raw_data)
+    df_init = pd.DataFrame(raw_data)
+    df_init.insert(0, 'id', range(1, len(df_init) + 1))
+    st.session_state['improve_df'] = df_init
+
+if 'editing_imp_id' not in st.session_state:
+    st.session_state['editing_imp_id'] = None
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## Menu List")
@@ -687,11 +696,11 @@ elif menu == "필드 클레임 현황":
 # --- 3. 개선 활동 관리 메뉴 ---
 elif menu == "개선 활동 관리":
     st.subheader("품목별 개선 내용 및 적용 현황 관리")
-    st.markdown("내장된 엑셀 데이터 기반으로 대상, 품명, 차종, 현상, 해당 품목, 고객사명 조건을 선택하여 조회하고 신규 개선 내용을 등록할 수 있습니다.")
+    st.markdown("내장된 엑셀 데이터 기반으로 대상, 품명, 차종, 현상, 해당 품목, 고객사명 조건을 선택하여 조회하고 신규 등록 및 수정할 수 있습니다.")
 
     imp_df = st.session_state['improve_df']
 
-    tab1, tab2 = st.tabs(["🔍 개선 내역 조회 및 검색", "➕ 신규 개선 내용 추가"])
+    tab1, tab2 = st.tabs(["🔍 개선 내역 조회 및 검색", "➕/✏️ 신규 등록 및 수정"])
 
     with tab1:
         if not imp_df.empty:
@@ -730,43 +739,82 @@ elif menu == "개선 활동 관리":
             st.markdown("---")
             st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
             
-            display_imp = filtered_imp.drop(columns=['비 고'], errors='ignore')
+            # 비고 항목 포함하여 출력 (id 컬럼은 제외하고 깔끔하게 표시)
+            display_imp = filtered_imp.drop(columns=['id'], errors='ignore')
             st.dataframe(display_imp, use_container_width=True)
         else:
             st.info("개선 활동 데이터가 비어있습니다.")
 
     with tab2:
-        st.markdown("### 신규 개선 내용 등록")
-        with st.form("add_improve_form"):
-            new_target = st.text_input("대상 (예: 승용, 상용)")
-            new_product = st.text_input("품명 (예: 워터펌프)")
-            new_car = st.text_input("차종 (예: 람다, 감마 II)")
-            new_phenomenon = st.text_input("현상 (예: 누수, 소음)")
-            new_measure = st.text_area("대책 내용")
-            new_part = st.text_input("해당 품목 (예: 25100-3CAC0)")
-            new_customer = st.text_input("고객사명 (예: HMC, WIA, KMC, -)")
-            new_date = st.date_input("적용일", value=date.today())
-            new_remark = st.text_input("비고")
+        st.markdown("### 개선 내용 신규 등록 및 기존 내역 수정")
+        
+        mode = st.radio("작업 선택", ["신규 등록", "기존 내역 수정"], horizontal=True)
 
-            submitted_imp = st.form_submit_button("개선 내용 등록", use_container_width=True)
-            if submitted_imp:
-                if new_part.strip():
-                    new_row = {
-                        '대상': new_target,
-                        '품명': new_product,
-                        '차종': new_car,
-                        '현상': new_phenomenon,
-                        '대책 내용': new_measure,
-                        '해당 품목': new_part,
-                        '고객사명': new_customer,
-                        '적용일': str(new_date),
-                        '비 고': new_remark
-                    }
-                    st.session_state['improve_df'] = pd.concat([st.session_state['improve_df'], pd.DataFrame([new_row])], ignore_index=True)
-                    st.success("신규 개선 내용이 성공적으로 등록되었습니다!")
-                    st.rerun()
-                else:
-                    st.error("해당 품목은 필수 입력 항목입니다.")
+        if mode == "기존 내역 수정":
+            # 수정할 항목 선택 selectbox
+            imp_options = imp_df.apply(lambda r: f"[ID:{r['id']}] 품목: {r['해당 품목']} / 차종: {r['차종']} / 대책: {str(r['대책 내용'])[:25]}...", axis=1).tolist()
+            selected_option = st.selectbox("수정할 개선 항목 선택", imp_options)
+            
+            if selected_option:
+                selected_id = int(selected_option.split(']')[0].replace('[ID:', ''))
+                target_row = imp_df[imp_df['id'] == selected_id].iloc[0]
+                
+                with st.form("edit_improve_form"):
+                    e_target = st.text_input("대상", value=str(target_row['대상']) if pd.notna(target_row['대상']) else "")
+                    e_product = st.text_input("품명", value=str(target_row['품명']) if pd.notna(target_row['품명']) else "")
+                    e_car = st.text_input("차종", value=str(target_row['차종']) if pd.notna(target_row['차종']) else "")
+                    e_phenomenon = st.text_input("현상", value=str(target_row['현상']) if pd.notna(target_row['현상']) else "")
+                    e_measure = st.text_area("대책 내용", value=str(target_row['대책 내용']) if pd.notna(target_row['대책 내용']) else "")
+                    e_part = st.text_input("해당 품목", value=str(target_row['해당 품목']) if pd.notna(target_row['해당 품목']) else "")
+                    e_customer = st.text_input("고객사명", value=str(target_row['고객사명']) if pd.notna(target_row['고객사명']) else "")
+                    
+                    try:
+                        default_date = datetime.strptime(str(target_row['적용일']).split()[0], '%Y-%m-%d').date()
+                    except:
+                        default_date = date.today()
+                    e_date = st.date_input("적용일", value=default_date)
+                    e_remark = st.text_input("비고", value=str(target_row['비 고']) if pd.notna(target_row['비 고']) else "")
+
+                    submitted_edit = st.form_submit_button("수정 내용 저장", use_container_width=True)
+                    if submitted_edit:
+                        st.session_state['improve_df'].loc[st.session_state['improve_df']['id'] == selected_id, ['대상', '품명', '차종', '현상', '대책 내용', '해당 품목', '고객사명', '적용일', '비 고']] = [
+                            e_target, e_product, e_car, e_phenomenon, e_measure, e_part, e_customer, str(e_date), e_remark
+                        ]
+                        st.success("개선 내용이 성공적으로 수정되었습니다!")
+                        st.rerun()
+        else:
+            with st.form("add_improve_form"):
+                new_target = st.text_input("대상 (예: 승용, 상용)")
+                new_product = st.text_input("품명 (예: 워터펌프)")
+                new_car = st.text_input("차종 (예: 람다, 감마 II)")
+                new_phenomenon = st.text_input("현상 (예: 누수, 소음)")
+                new_measure = st.text_area("대책 내용 (엔터로 줄바꿈을 반영할 수 있습니다)")
+                new_part = st.text_input("해당 품목 (예: 25100-3CAC0)")
+                new_customer = st.text_input("고객사명 (예: HMC, WIA, KMC, -)")
+                new_date = st.date_input("적용일", value=date.today())
+                new_remark = st.text_input("비고")
+
+                submitted_imp = st.form_submit_button("개선 내용 등록", use_container_width=True)
+                if submitted_imp:
+                    if new_part.strip():
+                        new_id = int(st.session_state['improve_df']['id'].max() + 1) if not st.session_state['improve_df'].empty else 1
+                        new_row = {
+                            'id': new_id,
+                            '대상': new_target,
+                            '품명': new_product,
+                            '차종': new_car,
+                            '현상': new_phenomenon,
+                            '대책 내용': new_measure,
+                            '해당 품목': new_part,
+                            '고객사명': new_customer,
+                            '적용일': str(new_date),
+                            '비 고': new_remark
+                        }
+                        st.session_state['improve_df'] = pd.concat([st.session_state['improve_df'], pd.DataFrame([new_row])], ignore_index=True)
+                        st.success("신규 개선 내용이 성공적으로 등록되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("해당 품목은 필수 입력 항목입니다.")
 
 # --- 4. 고객사 클레임 비용 분석 메뉴 ---
 elif menu == "고객사 클레임 비용 분석":
