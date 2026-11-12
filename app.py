@@ -747,43 +747,79 @@ elif menu == "개선 활동 관리":
         mode = st.radio("작업 선택", ["신규 등록", "기존 내역 수정"], horizontal=True)
 
         if mode == "기존 내역 수정":
-            # 에러 방지를 위해 안전한 문자열 포맷팅 사용
-            def make_option_label(r):
-                part = str(r['해당 품목']) if pd.notna(r['해당 품목']) else ""
-                car = str(r['차종']) if pd.notna(r['차종']) else ""
-                measure = str(r['대책 내용']).replace('\n', ' ') if pd.notna(r['대책 내용']) else ""
-                return f"[ID:{r['id']}] 품목: {part} / 차종: {car} / 대책: {measure[:30]}..."
-
-            imp_options = imp_df.apply(make_option_label, axis=1).tolist()
-            selected_option = st.selectbox("수정할 개선 항목 선택", imp_options)
+            st.markdown("##### 🔍 수정할 항목 검색 및 필터링")
             
-            if selected_option:
-                selected_id = int(selected_option.split(']')[0].replace('[ID:', ''))
-                target_row = imp_df[imp_df['id'] == selected_id].iloc[0]
-                
-                with st.form("edit_improve_form"):
-                    e_target = st.text_input("대상", value=str(target_row['대상']) if pd.notna(target_row['대상']) else "")
-                    e_product = st.text_input("품명", value=str(target_row['품명']) if pd.notna(target_row['품명']) else "")
-                    e_car = st.text_input("차종", value=str(target_row['차종']) if pd.notna(target_row['차종']) else "")
-                    e_phenomenon = st.text_input("현상", value=str(target_row['현상']) if pd.notna(target_row['현상']) else "")
-                    e_measure = st.text_area("대책 내용 (줄바꿈 반영 가능)", value=str(target_row['대책 내용']) if pd.notna(target_row['대책 내용']) else "")
-                    e_part = st.text_input("해당 품목", value=str(target_row['해당 품목']) if pd.notna(target_row['해당 품목']) else "")
-                    e_customer = st.text_input("고객사명", value=str(target_row['고객사명']) if pd.notna(target_row['고객사명']) else "")
-                    
-                    try:
-                        default_date = datetime.strptime(str(target_row['적용일']).split()[0], '%Y-%m-%d').date()
-                    except:
-                        default_date = date.today()
-                    e_date = st.date_input("적용일", value=default_date)
-                    e_remark = st.text_input("비고", value=str(target_row['비 고']) if pd.notna(target_row['비 고']) else "")
+            def get_edit_filter(label, col_name):
+                if col_name in imp_df.columns:
+                    options = sorted([str(x) for x in imp_df[col_name].dropna().unique() if str(x) != 'nan' and str(x) != '-'])
+                    return st.multiselect(f"{label}", options, key=f"edit_filter_{col_name}")
+                return []
 
-                    submitted_edit = st.form_submit_button("수정 내용 저장", use_container_width=True)
-                    if submitted_edit:
-                        st.session_state['improve_df'].loc[st.session_state['improve_df']['id'] == selected_id, ['대상', '품명', '차종', '현상', '대책 내용', '해당 품목', '고객사명', '적용일', '비 고']] = [
-                            e_target, e_product, e_car, e_phenomenon, e_measure, e_part, e_customer, str(e_date), e_remark
-                        ]
-                        st.success("개선 내용이 성공적으로 수정되었습니다!")
-                        st.rerun()
+            e_c1, e_c2, e_c3 = st.columns(3)
+            with e_c1: edit_targets = get_edit_filter("대상", "대상")
+            with e_c2: edit_products = get_edit_filter("품명", "품명")
+            with e_c3: edit_cars = get_edit_filter("차종", "차종")
+
+            e_c4, e_c5, e_c6 = st.columns(3)
+            with e_c4: edit_phenoms = get_edit_filter("현상", "현상")
+            with e_c5: edit_parts_f = get_edit_filter("해당 품목", "해당 품목")
+            with e_c6: edit_custs = get_edit_filter("고객사명", "고객사명")
+
+            target_pool = imp_df.copy()
+            if edit_targets and '대상' in target_pool.columns: target_pool = target_pool[target_pool['대상'].astype(str).isin(edit_targets)]
+            if edit_products and '품명' in target_pool.columns: target_pool = target_pool[target_pool['품명'].astype(str).isin(edit_products)]
+            if edit_cars and '차종' in target_pool.columns: target_pool = target_pool[target_pool['차종'].astype(str).isin(edit_cars)]
+            if edit_phenoms and '현상' in target_pool.columns: target_pool = target_pool[target_pool['현상'].astype(str).isin(edit_phenoms)]
+            if edit_parts_f and '해당 품목' in target_pool.columns: target_pool = target_pool[target_pool['해당 품목'].astype(str).isin(edit_parts_f)]
+            if edit_custs and '고객사명' in target_pool.columns: target_pool = target_pool[target_pool['고객사명'].astype(str).isin(edit_custs)]
+
+            if target_pool.empty:
+                st.warning("선택한 조건에 해당하는 개선 내역이 없습니다.")
+            else:
+                def make_option_label(r):
+                    part = str(r['해당 품목']) if pd.notna(r['해당 품목']) else ""
+                    car = str(r['차종']) if pd.notna(r['차종']) else ""
+                    measure = str(r['대책 내용']).replace('\n', ' ') if pd.notna(r['대책 내용']) else ""
+                    return f"[ID:{r['id']}] 품목: {part} / 차종: {car} / 대책: {measure[:30]}..."
+
+                imp_options = target_pool.apply(make_option_label, axis=1).tolist()
+                selected_option = st.selectbox("수정할 개선 항목 선택", imp_options)
+                
+                if selected_option:
+                    selected_id = int(selected_option.split(']')[0].replace('[ID:', ''))
+                    target_row = imp_df[imp_df['id'] == selected_id].iloc[0]
+                    
+                    with st.form("edit_improve_form"):
+                        e_target = st.text_input("대상", value=str(target_row['대상']) if pd.notna(target_row['대상']) else "")
+                        e_product = st.text_input("품명", value=str(target_row['품명']) if pd.notna(target_row['품명']) else "")
+                        e_car = st.text_input("차종", value=str(target_row['차종']) if pd.notna(target_row['차종']) else "")
+                        e_phenomenon = st.text_input("현상", value=str(target_row['현상']) if pd.notna(target_row['현상']) else "")
+                        e_measure = st.text_area("대책 내용 (줄바꿈 반영 가능)", value=str(target_row['대책 내용']) if pd.notna(target_row['대책 내용']) else "")
+                        e_part = st.text_input("해당 품목", value=str(target_row['해당 품목']) if pd.notna(target_row['해당 품목']) else "")
+                        e_customer = st.text_input("고객사명", value=str(target_row['고객사명']) if pd.notna(target_row['고객사명']) else "")
+                        
+                        try:
+                            default_date = datetime.strptime(str(target_row['적용일']).split()[0], '%Y-%m-%d').date()
+                        except:
+                            default_date = date.today()
+                        e_date = st.date_input("적용일", value=default_date)
+                        e_remark = st.text_input("비고", value=str(target_row['비 고']) if pd.notna(target_row['비 고']) else "")
+
+                        col_btn1, col_btn2 = st.columns(2)
+                        submitted_edit = col_btn1.form_submit_button("수정 내용 저장", use_container_width=True)
+                        submitted_delete = col_btn2.form_submit_button("이 항목 삭제하기", use_container_width=True)
+
+                        if submitted_edit:
+                            st.session_state['improve_df'].loc[st.session_state['improve_df']['id'] == selected_id, ['대상', '품명', '차종', '현상', '대책 내용', '해당 품목', '고객사명', '적용일', '비 고']] = [
+                                e_target, e_product, e_car, e_phenomenon, e_measure, e_part, e_customer, str(e_date), e_remark
+                            ]
+                            st.success("개선 내용이 성공적으로 수정되었습니다!")
+                            st.rerun()
+
+                        if submitted_delete:
+                            st.session_state['improve_df'] = st.session_state['improve_df'][st.session_state['improve_df']['id'] != selected_id].reset_index(drop=True)
+                            st.success("해당 개선 항목이 삭제되었습니다!")
+                            st.rerun()
         else:
             with st.form("add_improve_form"):
                 new_target = st.text_input("대상 (예: 승용, 상용)")
