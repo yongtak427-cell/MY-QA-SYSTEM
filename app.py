@@ -25,7 +25,7 @@ st.markdown("""
         font-weight: 600 !important;
         padding: 6px 0px;
     }
-    /* 테이블 내 텍스트 줄바꿈 허용 */
+    /* 테이블 내 텍스트 줄바꿈 및 세로 정렬 허용 */
     div[data-testid="stDataFrame"] td {
         white-space: pre-wrap !important;
         vertical-align: middle !important;
@@ -86,7 +86,7 @@ if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFra
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 
-# 첨부된 엑셀 전체 데이터 임베딩 초기화 (고유 ID 추가)
+# 첨부된 엑셀 전체 데이터 임베딩 초기화 (줄바꿈 반영)
 if 'improve_df' not in st.session_state:
     raw_data = [
         {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '누수/소음', '대책 내용': 'M/SEAL M/R 재질 환원(ES5 ▶ ES4)', '해당 품목': '25100-3CAC0', '고객사명': '-', '적용일': '2016-06-27', '비 고': ''},
@@ -155,9 +155,6 @@ if 'improve_df' not in st.session_state:
     df_init = pd.DataFrame(raw_data)
     df_init.insert(0, 'id', range(1, len(df_init) + 1))
     st.session_state['improve_df'] = df_init
-
-if 'editing_imp_id' not in st.session_state:
-    st.session_state['editing_imp_id'] = None
 
 # 사이드바 메뉴 (Menu List)
 st.sidebar.markdown("## Menu List")
@@ -739,7 +736,6 @@ elif menu == "개선 활동 관리":
             st.markdown("---")
             st.markdown(f"조회된 개선 활동 내역 (총 {len(filtered_imp)}건)")
             
-            # 비고 항목 포함하여 출력 (id 컬럼은 제외하고 깔끔하게 표시)
             display_imp = filtered_imp.drop(columns=['id'], errors='ignore')
             st.dataframe(display_imp, use_container_width=True)
         else:
@@ -751,8 +747,14 @@ elif menu == "개선 활동 관리":
         mode = st.radio("작업 선택", ["신규 등록", "기존 내역 수정"], horizontal=True)
 
         if mode == "기존 내역 수정":
-            # 수정할 항목 선택 selectbox
-            imp_options = imp_df.apply(lambda r: f"[ID:{r['id']}] 품목: {r['해당 품목']} / 차종: {r['차종']} / 대책: {str(r['대책 내용'])[:25]}...", axis=1).tolist()
+            # 에러 방지를 위해 안전한 문자열 포맷팅 사용
+            def make_option_label(r):
+                part = str(r['해당 품목']) if pd.notna(r['해당 품목']) else ""
+                car = str(r['차종']) if pd.notna(r['차종']) else ""
+                measure = str(r['대책 내용']).replace('\n', ' ') if pd.notna(r['대책 내용']) else ""
+                return f"[ID:{r['id']}] 품목: {part} / 차종: {car} / 대책: {measure[:30]}..."
+
+            imp_options = imp_df.apply(make_option_label, axis=1).tolist()
             selected_option = st.selectbox("수정할 개선 항목 선택", imp_options)
             
             if selected_option:
@@ -764,7 +766,7 @@ elif menu == "개선 활동 관리":
                     e_product = st.text_input("품명", value=str(target_row['품명']) if pd.notna(target_row['품명']) else "")
                     e_car = st.text_input("차종", value=str(target_row['차종']) if pd.notna(target_row['차종']) else "")
                     e_phenomenon = st.text_input("현상", value=str(target_row['현상']) if pd.notna(target_row['현상']) else "")
-                    e_measure = st.text_area("대책 내용", value=str(target_row['대책 내용']) if pd.notna(target_row['대책 내용']) else "")
+                    e_measure = st.text_area("대책 내용 (줄바꿈 반영 가능)", value=str(target_row['대책 내용']) if pd.notna(target_row['대책 내용']) else "")
                     e_part = st.text_input("해당 품목", value=str(target_row['해당 품목']) if pd.notna(target_row['해당 품목']) else "")
                     e_customer = st.text_input("고객사명", value=str(target_row['고객사명']) if pd.notna(target_row['고객사명']) else "")
                     
