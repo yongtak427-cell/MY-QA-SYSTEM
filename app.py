@@ -382,7 +382,7 @@ elif menu == "필드 클레임 현황":
         try:
             sheet_url = st.session_state['gsheet_url']
             
-            # pubhtml 주소를 안전하게 엑셀/HTML 파싱 또는 CSV 내보내기 주소로 자동 변환
+            # pubhtml 주소를 안전하게 엑셀 파싱 또는 CSV 내보내기 주소로 자동 변환
             if "pubhtml" in sheet_url:
                 base_url = sheet_url.split('/pubhtml')[0]
                 export_url = base_url + '/export?format=csv'
@@ -391,20 +391,21 @@ elif menu == "필드 클레임 현황":
             else:
                 export_url = sheet_url
 
-            # 오류 방지를 위해 HTML 테이블 파싱 방식 시도 후 실패시 CSV 읽기 시도
+            raw_df = pd.DataFrame()
             try:
-                if "pubhtml" in sheet_url:
-                    dfs = pd.read_html(sheet_url)
-                    raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
-                else:
-                    raw_df = pd.read_csv(export_url)
+                # 1차 시도: CSV 내보내기 주소로 읽기 (가장 안정적)
+                raw_df = pd.read_csv(export_url)
             except Exception:
-                # 대체 수단: read_html 직접 시도
-                dfs = pd.read_html(sheet_url)
-                raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
+                try:
+                    # 2차 시도: HTML 파서 기본 엔진(html.parser) 사용 (lxml 불필요)
+                    dfs = pd.read_html(sheet_url, flavor='bs4')
+                    if not dfs:
+                        dfs = pd.read_html(sheet_url)
+                    raw_df = dfs[0] if len(dfs) > 0 else pd.DataFrame()
+                except Exception as e2:
+                    raise Exception(f"데이터를 읽어오지 못했습니다. URL과 공유 권한을 확인해주세요. (상세: {e2})")
 
             if not raw_df.empty:
-                # 만약 첫 번째 행이 헤더가 아니라 데이터인 경우 처리
                 if 'No.' not in str(raw_df.columns):
                     raw_df.columns = raw_df.iloc[0]
                     raw_df = raw_df[1:].reset_index(drop=True)
@@ -414,7 +415,7 @@ elif menu == "필드 클레임 현황":
                 st.success("구글 시트에서 데이터를 성공적으로 불러왔습니다!")
                 st.rerun()
             else:
-                st.error("구글 시트에서 데이터를 가져오지 못했습니다. 시트 주소와 권한을 확인해주세요.")
+                st.error("구글 시트 데이터가 비어있거나 읽을 수 없습니다.")
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
