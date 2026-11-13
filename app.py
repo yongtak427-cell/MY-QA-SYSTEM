@@ -912,7 +912,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 및 안정적 데이터 가공) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (오류 해결 반영 코드) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(새로 추가되는 고객사 및 월별 법인 시트 포함)**를 동적으로 자동 탐색하여 통합 취합합니다.")
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 동적 취합 처리 (수정된 로직)
+    # 엑셀 파일 업로드 시 동적 취합 처리
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -974,7 +974,7 @@ elif menu == "고객사 클레임 비용 분석":
                     elif '최종원인업체' in cols:
                         cust_name = "모비스"
                     
-                    # 발생처 찾기 (없으면 기본값 'D')
+                    # 발생처 찾기
                     source_col = next((c for c in cols if '발생' in str(c)), None)
                     df_sheet['발생처'] = df_sheet[source_col].astype(str) if source_col and source_col in df_sheet.columns else 'D'
                     
@@ -982,7 +982,7 @@ elif menu == "고객사 클레임 비용 분석":
                     num_col = next((c for c in cols if '통보서' in str(c) or '클레임번호' in str(c) or 'R/O' in str(c)), None)
                     df_sheet['통보서번호'] = df_sheet[num_col].astype(str) if num_col and num_col in df_sheet.columns else ''
                     
-                    # 금액 찾기 (청구금액, 합계 등 포함)
+                    # 금액 찾기
                     amt_col = next((c for c in cols if '금액' in str(c) or '합계' in str(c) or '청구' in str(c)), None)
                     if amt_col and amt_col in df_sheet.columns:
                         df_sheet['금액'] = pd.to_numeric(df_sheet[amt_col], errors='coerce').fillna(0)
@@ -1013,35 +1013,51 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 🔍 조회 및 검색 필터 (고객사 / 발생처 / 품목별)")
         
+        # '고객사', '발생처', '품목' 컬럼 존재 여부 체크 후 필터 생성
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
-            all_customers = sorted(cost_df['고객사'].dropna().unique().tolist())
-            selected_cust_filter = st.multiselect("고객사 선택", all_customers, default=all_customers)
+            if '고객사' in cost_df.columns:
+                all_customers = sorted(cost_df['고객사'].dropna().unique().tolist())
+                selected_cust_filter = st.multiselect("고객사 선택", all_customers, default=all_customers)
+            else:
+                selected_cust_filter = []
         with f_col2:
-            all_sources = sorted(cost_df['발생처'].dropna().unique().tolist())
-            selected_source_filter = st.multiselect("발생처 선택", all_sources, default=all_sources)
+            if '발생처' in cost_df.columns:
+                all_sources = sorted(cost_df['발생처'].dropna().unique().tolist())
+                selected_source_filter = st.multiselect("발생처 선택", all_sources, default=all_sources)
+            else:
+                selected_source_filter = []
         with f_col3:
-            all_parts = sorted(cost_df['품목'].dropna().unique().tolist())
-            selected_part_filter = st.multiselect("품목 선택", all_parts, default=all_parts)
+            if '품목' in cost_df.columns:
+                all_parts = sorted(cost_df['품목'].dropna().unique().tolist())
+                selected_part_filter = st.multiselect("품목 선택", all_parts, default=all_parts)
+            else:
+                selected_part_filter = []
 
-        # 필터 적용
-        filtered_cost = cost_df[
-            cost_df['고객사'].isin(selected_cust_filter) &
-            cost_df['발생처'].isin(selected_source_filter) &
-            cost_df['품목'].isin(selected_part_filter)
-        ]
+        # 필터 적용 안전하게 처리
+        filtered_cost = cost_df.copy()
+        if '고객사' in filtered_cost.columns and selected_cust_filter:
+            filtered_cost = filtered_cost[filtered_cost['고객사'].isin(selected_cust_filter)]
+        if '발생처' in filtered_cost.columns and selected_source_filter:
+            filtered_cost = filtered_cost[filtered_cost['발생처'].isin(selected_source_filter)]
+        if '품목' in filtered_cost.columns and selected_part_filter:
+            filtered_cost = filtered_cost[filtered_cost['품목'].isin(selected_part_filter)]
 
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        grouped_summary = filtered_cost.groupby(['고객사', '발생처', '통보서번호']).agg(
-            금액=('금액', 'sum'),
-            건수=('금액', 'count')
-        ).reset_index()
+        group_cols = [c for c in ['고객사', '발생처', '통보서번호'] if c in filtered_cost.columns]
+        if group_cols:
+            grouped_summary = filtered_cost.groupby(group_cols).agg(
+                금액=('금액', 'sum'),
+                건수=('금액', 'count')
+            ).reset_index()
+        else:
+            grouped_summary = filtered_cost.copy()
 
         st.dataframe(grouped_summary, use_container_width=True, height=400)
 
-        total_amount = filtered_cost['금액'].sum()
+        total_amount = filtered_cost['금액'].sum() if '금액' in filtered_cost.columns else 0
         total_count = len(filtered_cost)
         st.markdown(f"**합 계 금액:** ₩ {total_amount:,.0f} | **총 건수:** {total_count:,}건")
 
@@ -1052,13 +1068,19 @@ elif menu == "고객사 클레임 비용 분석":
 
         with col_t1:
             st.markdown("#### 고객사별 현황")
-            cust_summary = filtered_cost.groupby('고객사')['금액'].sum().reset_index()
-            st.dataframe(cust_summary, use_container_width=True, height=320)
+            if '고객사' in filtered_cost.columns and '금액' in filtered_cost.columns:
+                cust_summary = filtered_cost.groupby('고객사')['금액'].sum().reset_index()
+                st.dataframe(cust_summary, use_container_width=True, height=320)
+            else:
+                st.info("고객사별 데이터가 없습니다.")
 
         with col_t2:
             st.markdown("#### 품목별 현황")
-            part_summary = filtered_cost.groupby('품목')['금액'].sum().reset_index()
-            st.dataframe(part_summary, use_container_width=True, height=320)
+            if '품목' in filtered_cost.columns and '금액' in filtered_cost.columns:
+                part_summary = filtered_cost.groupby('품목')['금액'].sum().reset_index()
+                st.dataframe(part_summary, use_container_width=True, height=320)
+            else:
+                st.info("품목별 데이터가 없습니다.")
 
     else:
         st.info("고객사 클레임 비용 원본 엑셀 파일을 업로드하거나 구글 시트를 연동해주세요.")
