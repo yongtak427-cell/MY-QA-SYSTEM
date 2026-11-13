@@ -31,7 +31,6 @@ st.markdown("""
         padding: 0.25rem 0.5rem !important;
         font-size: 14px !important;
     }
-    /* st.dataframe 내부 텍스트 줄바꿈 및 상하 정렬 보장 */
     div[data-testid="stDataFrame"] td {
         white-space: pre-wrap !important;
         vertical-align: middle !important;
@@ -877,16 +876,15 @@ elif menu == "고객사 클레임 비용 분석":
                 ]
 
                 for sheet_name in all_sheets:
-                    # 요약 시트나 타이틀 시트 제외 (행이 너무 적거나 데이터 구조가 다른 경우)
                     df_raw_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=None)
                     if df_raw_sheet.empty or len(df_raw_sheet) < 3:
                         continue
                     
-                    # 헤더 행 찾기 (키워드 기반 탐색)
+                    # 헤더 행 찾기 (현대/기아 등 상단 메타데이터 3~5행 건너뛰기)
                     header_row_idx = 0
-                    for idx, row in df_raw_sheet.iterrows():
+                    for idx, row in df_raw_sheet.iloc[:10].iterrows():
                         row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                        if any(k in row_str for k in ["법인", "원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No."]):
+                        if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "RO(클레임)번호"]):
                             header_row_idx = idx
                             break
                     
@@ -897,12 +895,10 @@ elif menu == "고객사 클레임 비용 분석":
                         
                     df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
                     
-                    # 시트별 특성에 따른 컬럼 매핑 및 계산 처리
                     processed_rows = []
                     for _, row in df_sheet.iterrows():
                         row_dict = {}
                         
-                        # 공통 기본값
                         row_dict['법인'] = str(sheet_name)
                         row_dict['발생구분'] = str(row.get('발생구분', row.get('결함구분', row.get('클레임유형', 'D'))))
                         row_dict['통보서'] = str(row.get('통보서', row.get('클레임번호', row.get('위아통보서', ''))))
@@ -926,8 +922,7 @@ elif menu == "고객사 클레임 비용 분석":
                         row_dict['주행거리'] = str(row.get('주행거리', row.get('주행거리(Km)', '')))
                         row_dict['납입율'] = str(row.get('납입율', row.get('납입률', '100.00')))
                         
-                        # 분담율 및 비용 계산 (모비스 및 WIA산동 특화 환산 로직 반영)
-                        share_rate = float(row.get('분담율', row.get('분담률', row.get('업체분담률\n(%)', row.get('업체분담률(%)', 19.01)))))
+                        share_rate = float(row.get('분담율', row.get('분담률', row.get('업체분담율\n(%)', row.get('업체분담율(%)', 19.01)))))
                         if share_rate > 1:
                             share_rate_val = share_rate / 100
                         else:
@@ -940,9 +935,7 @@ elif menu == "고객사 클레임 비용 분석":
                         raw_labor = float(pd.to_numeric(row.get('공임비', row.get('변제 공임비', row.get('공임비', 0))), errors='coerce') or 0)
                         raw_out = float(pd.to_numeric(row.get('외주비', row.get('변제 외주비', row.get('외주비', 0))), errors='coerce') or 0)
                         
-                        # 환율 적용 또는 분담율 계산 반영
                         if "산동" in sheet_name or "모비스" in sheet_name:
-                            # 예시안3 기준 환산 (변제대상금액 또는 청구금액에 분담율 적용)
                             target_amt = float(pd.to_numeric(row.get('변제대상금액', raw_part + raw_labor), errors='coerce') or (raw_part + raw_labor))
                             calc_part = raw_part * share_rate_val if raw_part > 0 else target_amt * share_rate_val * 0.5
                             calc_labor = raw_labor * share_rate_val if raw_labor > 0 else target_amt * share_rate_val * 0.5
@@ -983,41 +976,41 @@ elif menu == "고객사 클레임 비용 분석":
 
     if not cost_df.empty:
         st.markdown("---")
-        st.markdown("### 🔍 조회 및 검색 필터")
+        st.markdown("### 🔍 조회 및 검색 필터 (원하는 항목만 골라서 조회하세요)")
         
-        # 요청하신 필터 항목 구성 (법인, 발생구분, 통보서, H/K, R/O번호, VIN, 차종, 원인부품, 원인품명)
+        # 필터 기본값을 빈 상태([])로 설정하여 사용자가 직접 선택하게 함
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
             all_corps = sorted(cost_df['법인'].dropna().unique().tolist()) if '법인' in cost_df.columns else []
-            selected_corp_filter = st.multiselect("법인", all_corps, default=all_corps)
+            selected_corp_filter = st.multiselect("법인", all_corps, default=[])
         with f_col2:
             all_sources = sorted(cost_df['발생구분'].dropna().unique().tolist()) if '발생구분' in cost_df.columns else []
-            selected_source_filter = st.multiselect("발생구분", all_sources, default=all_sources)
+            selected_source_filter = st.multiselect("발생구분", all_sources, default=[])
         with f_col3:
             all_notices = sorted(cost_df['통보서'].dropna().unique().tolist()) if '통보서' in cost_df.columns else []
-            selected_notice_filter = st.multiselect("통보서", all_notices, default=all_notices)
+            selected_notice_filter = st.multiselect("통보서", all_notices, default=[])
 
         f_col4, f_col5, f_col6 = st.columns(3)
         with f_col4:
             all_hks = sorted(cost_df['H/K'].dropna().unique().tolist()) if 'H/K' in cost_df.columns else []
-            selected_hk_filter = st.multiselect("H/K", all_hks, default=all_hks)
+            selected_hk_filter = st.multiselect("H/K", all_hks, default=[])
         with f_col5:
             all_ro_nos = sorted(cost_df['R/O번호'].dropna().unique().tolist()) if 'R/O번호' in cost_df.columns else []
-            selected_ro_filter = st.multiselect("R/O번호", all_ro_nos, default=all_ro_nos)
+            selected_ro_filter = st.multiselect("R/O번호", all_ro_nos, default=[])
         with f_col6:
             all_vins = sorted(cost_df['VIN'].dropna().unique().tolist()) if 'VIN' in cost_df.columns else []
-            selected_vin_filter = st.multiselect("VIN", all_vins, default=all_vins)
+            selected_vin_filter = st.multiselect("VIN", all_vins, default=[])
 
         f_col7, f_col8, f_col9 = st.columns(3)
         with f_col7:
             all_cars = sorted(cost_df['차종'].dropna().unique().tolist()) if '차종' in cost_df.columns else []
-            selected_car_filter = st.multiselect("차종", all_cars, default=all_cars)
+            selected_car_filter = st.multiselect("차종", all_cars, default=[])
         with f_col8:
             all_part_nos = sorted(cost_df['원인부품'].dropna().unique().tolist()) if '원인부품' in cost_df.columns else []
-            selected_partno_filter = st.multiselect("원인부품", all_part_nos, default=all_part_nos)
+            selected_partno_filter = st.multiselect("원인부품", all_part_nos, default=[])
         with f_col9:
             all_part_names = sorted(cost_df['원인품명'].dropna().unique().tolist()) if '원인품명' in cost_df.columns else []
-            selected_partname_filter = st.multiselect("원인품명", all_part_names, default=all_part_names)
+            selected_partname_filter = st.multiselect("원인품명", all_part_names, default=[])
 
         filtered_cost = cost_df.copy()
         if '법인' in filtered_cost.columns and selected_corp_filter:
@@ -1055,6 +1048,19 @@ elif menu == "고객사 클레임 비용 분석":
                 formatted_summary[col] = formatted_summary[col].apply(lambda x: f"₩ {x:,.0f}" if isinstance(x, (int, float)) else x)
 
         st.dataframe(formatted_summary, use_container_width=True, height=400)
+
+        # 엑셀 다운로드 버튼 추가
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            filtered_cost[available_display_cols].to_excel(writer, index=False, sheet_name='수정 취합')
+        excel_data = output.getvalue()
+
+        st.download_button(
+            label="📥 현재 취합된 데이터를 엑셀 파일로 다운로드",
+            data=excel_data,
+            file_name="필드_클레임_비용_수정취합.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         total_part = filtered_cost['부품비'].sum() if '부품비' in filtered_cost.columns else 0
         total_labor = filtered_cost['공임비'].sum() if '공임비' in filtered_cost.columns else 0
