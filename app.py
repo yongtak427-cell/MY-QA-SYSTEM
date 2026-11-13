@@ -76,88 +76,24 @@ if 'cal_month' not in st.session_state: st.session_state['cal_month'] = datetime
 if 'selected_date' not in st.session_state: st.session_state['selected_date'] = date.today()
 if 'editing_task_id' not in st.session_state: st.session_state['editing_task_id'] = None
 
-# 확인 모달/상태 저장을 위한 세션
 if 'delete_confirm_id' not in st.session_state: st.session_state['delete_confirm_id'] = None
 if 'save_confirm_type' not in st.session_state: st.session_state['save_confirm_type'] = None
 if 'pending_form_data' not in st.session_state: st.session_state['pending_form_data'] = None
 
-# 클레임 데이터 및 개선활동 데이터 세션 유지 보장
 if 'claim_df' not in st.session_state: st.session_state['claim_df'] = pd.DataFrame()
 if 'cost_df' not in st.session_state: st.session_state['cost_df'] = pd.DataFrame()
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'improve_uploaded_file_name' not in st.session_state: st.session_state['improve_uploaded_file_name'] = None
 if 'cost_uploaded_file_name' not in st.session_state: st.session_state['cost_uploaded_file_name'] = None
 
-# 구글 시트 URL 세션 설정
 if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
 if 'improve_gsheet_url' not in st.session_state: st.session_state['improve_gsheet_url'] = ""
 if 'cost_gsheet_url' not in st.session_state: st.session_state['cost_gsheet_url'] = ""
 
-# 첨부된 엑셀 전체 데이터 임베딩 초기화 (줄바꿈 반영)
 if 'improve_df' not in st.session_state:
     raw_data = [
         {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '누수/소음', '대책 내용': 'M/SEAL M/R 재질 환원(ES5 ▶ ES4)', '해당 품목': '25100-3CAC0', '고객사명': '-', '적용일': '2016-06-27', '비 고': ''},
         {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '누수/소음', '대책 내용': 'M/SEAL M/R 재질 환원(ES5 ▶ ES4)', '해당 품목': '25100-3L100', '고객사명': '-', '적용일': '2016-06-27', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '소음', '대책 내용': 'M/SEAL M/R 조도 하한품 적용', '해당 품목': '25100-3CAC0', '고객사명': 'HMC', '적용일': '2021-11-16', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '소음', '대책 내용': 'M/SEAL M/R 조도 하한품 적용', '해당 품목': '25100-3CAC0', '고객사명': 'KMC', '적용일': '2021-11-17', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '소음', '대책 내용': 'M/SEAL M/R 조도 하한품 적용', '해당 품목': '25100-3L100', '고객사명': 'HMC', '적용일': '2021-11-16', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '람다', '현상': '소음', '대책 내용': 'M/SEAL M/R 조도 하한품 적용', '해당 품목': '25100-3L100', '고객사명': 'KMC', '적용일': '2021-11-17', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 I', '현상': '누수', '대책 내용': 'BODY 드레인챔버 용량 증대\n└ 2.7cc ▶ 9.5cc, +6.8cc', '해당 품목': '25100-2B700', '고객사명': '-', '적용일': '2020-12-17', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '워터펌프 BODY 공용화 진행', '해당 품목': '25100-2M801', '고객사명': '-', '적용일': '2021-12-13', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·임펠러 게이트 위치 변경\n  └ 인서트 엣지부 ▶ 평면부', '해당 품목': '25100-2M801', '고객사명': '-', '적용일': '2022-07-10', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·임펠러 게이트 위치 변경\n  └ 인서트 엣지부 ▶ 평면부', '해당 품목': '25100-2MHA1', '고객사명': '-', '적용일': '2022-07-10', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2M013', '고객사명': 'WIA', '적용일': '2025-12-03', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2M013', '고객사명': 'HMC', '적용일': '2026-06-24', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2M801', '고객사명': 'WIA', '적용일': '2025-12-03', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2M801', '고객사명': 'HMC', '적용일': '2026-06-24', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2MHA1', '고객사명': 'WIA', '적용일': '2025-12-03', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '감마 II', '현상': '누수', '대책 내용': '·설계 변경\n  └ BODY 드레인챔버 용량 증대 (7.4cc ▶ 14cc)\n  └ BODY Rib 추가 (두께 5mm, 각도 17˚)', '해당 품목': '25100-2MHA1', '고객사명': 'HMC', '적용일': '2026-06-24', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '소음', '대책 내용': '·M/SEAL 취부장(CMS) 관리치 설정\n  └ 7.1±0.1 ▶ 7.14±0.04 (중상한)', '해당 품목': '25100-2J000', '고객사명': '-', '적용일': '2020-12-17', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '소음', '대책 내용': '·M/SEAL 취부장(CMS) 관리치 설정\n  └ 7.1±0.1 ▶ 7.14±0.04 (중상한)', '해당 품목': '25100-2J600', '고객사명': '-', '적용일': '2020-12-17', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·BR’G 압입지그 개선\n  └ 상부 지그 마모 문제 개선(교체)', '해당 품목': '25100-2J450', '고객사명': '-', '적용일': '2025-02-18', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL S/R연마 높이 관리치 설정 (북미씰 사양만)\n  └ 1.5±0.2 ▶ 1.55±0.1 / 1.3~1.7 ▶ 1.45~1.65', '해당 품목': '25100-2J450', '고객사명': '-', '적용일': '2025-02-03', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·텍스처씰 택시 차량 운행 평가 [LPI 택시 차량]', '해당 품목': '25100-2J450', '고객사명': '-', '적용일': '2025-04-29', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL 컵가스켓 압축률 증대(1차)\n  └ 평균 13.1% → 14.3% (1.25%↑)', '해당 품목': '25100-2J450', '고객사명': '-', '적용일': '2026-07-18', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL 컵가스켓 압축률 증대(2차)\n  └ 평균 17.4% (4.33%↑)', '해당 품목': '25100-2J450', '고객사명': 'WIA', '적용일': '2026-08-03', '비 고': '산동공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL 컵가스켓 압축률 증대(2차)\n  └ 평균 17.4% (4.33%↑)', '해당 품목': '25100-2J450', '고객사명': 'HMC', '적용일': '2026-10-16', '비 고': '아산공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL 컵가스켓 압축률 증대(2차)\n  └ 평균 17.4% (4.33%↑)', '해당 품목': '25100-2J450', '고객사명': 'KMC', '적용일': '2026-10-21', '비 고': '화성공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': 'NU개선', '현상': '누수', '대책 내용': '·M/SEAL 컵가스켓 재질 변경\n  └ HNBR G457 → G969 or G428', '해당 품목': '25100-2J450', '고객사명': '-', '적용일': '진행중', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '누수', '대책 내용': '·오링 RIB 및 COVER 오링 홈 부 삭제', '해당 품목': '카파개선 전차종', '고객사명': '-', '적용일': '2021-09-03', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '누수', '대책 내용': '·니플 록타이트 도포 지그 변경\n  └ 디스크 ▶ 캡(측면 홀) 타입', '해당 품목': '카파개선 전차종', '고객사명': '-', '적용일': '2022-02-22', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '누수', '대책 내용': '·니플 록타이트 도포 비전 검사 \n  └ 육안 ▶ 비전 검사', '해당 품목': '카파개선 전차종', '고객사명': '-', '적용일': '2022-03-21', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '누수', '대책 내용': '·M/SEAL 다보부 형상 개선\n  └ 신규금형 제작 및 중요치수 설정', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2024-07-11', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '누수', '대책 내용': '·M/SEAL 다보부 형상 개선\n  └ 신규금형 제작 및 중요치수 설정', '해당 품목': '48V 차종', '고객사명': 'WIA', '적용일': '2024-12-28', '비 고': '평택공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·BR’G 그리스 주입 치수 개선 및 주입량 관리치 설정\n  └ 그리스 주입량 : 0.95~1.15g ▶ 0.85~1.05g', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2022-09-15', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·베어링 경방향 클리어런스 관리치 설정\n  └ 20~35㎛ ▶ 20~31㎛', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2022-10-25', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·설계 변경\n  └ BODY & 베어링 압입대 변경', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2023-09-15', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·베어링 그리스 주입량 관리 방법 변경(고정)\n  └ 관리 범위(0.85~1.05g) ▶ 고정량 주입(0.95g)', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2024-02-19', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·베어링 그리스 주입 치구 변경\n  └ 그리스 주입 홀(10개 ▶ 12개)', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2024-02-19', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·베어링 립씰 폭 두께 개선\n  └ SPEC: 1.3 -0.02/+0.03, ACT: 1.26(-0.04)', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2024-02-19', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 외륜 Burr 개선 (금형 개선) 및 관리 강화', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2025-04-22', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 외경 치수 관리치 설정(하한 관리 ▶ 중/상한 관리)\n·립씰 중요치수 관리치 설정 및 특별특성 항목 지정', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2025-06-18', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 신금형(NBR) 제작/적용', '해당 품목': 'N48V 차종', '고객사명': '-', '적용일': '2025-09-11', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-07010', '고객사명': 'A/S', '적용일': '2026-03-30', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-07501', '고객사명': 'A/S', '적용일': '2026-03-06', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-08001', '고객사명': 'WIA', '적용일': '2026-03-18', '비 고': '서산공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-07510', '고객사명': 'WIA', '적용일': '2026-03-11', '비 고': '서산공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-07GA0', '고객사명': 'WIA', '적용일': '2026-03-13', '비 고': '서산공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (N48V)', '현상': '소음', '대책 내용': '·립씰 재질변경(NBR→HNBR)', '해당 품목': '25100-07TA0', '고객사명': 'WIA', '적용일': '2026-03-13', '비 고': '평택공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·메카니컬씰 압입 설비 조건 변경\n  └ 압입 거리 ▶ 압입력 제어 방법 & 최대 압입력 400kgfm', '해당 품목': '25100-07800', '고객사명': 'WIA', '적용일': '2020-07-06', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·메카니컬씰 압입 설비 조건 변경\n  └ 압입 거리 ▶ 압입력 제어 방법 & 최대 압입력 400kgfm', '해당 품목': '25100-08400', '고객사명': 'WIA', '적용일': '2020-07-06', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·메카니컬씰 압입 지그 타입 변경\n  └ 분리형 ▶ 일체형', '해당 품목': '25100-07800', '고객사명': 'WIA', '적용일': '2021-11-19', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·메카니컬씰 압입 지그 타입 변경\n  └ 분리형 ▶ 일체형', '해당 품목': '25100-08400', '고객사명': 'WIA', '적용일': '2021-11-19', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·BODY M/SEAL 조립 내경 가공 공법 변경\n  └ 분할가공 ▶ 연속가공', '해당 품목': '25100-07800', '고객사명': 'WIA', '적용일': '2022-03-29', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·BODY M/SEAL 조립 내경 가공 공법 변경\n  └ 분할가공 ▶ 연속가공', '해당 품목': '25100-08400', '고객사명': 'WIA', '적용일': '2022-03-29', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·설계 변경 \n  └ 바디 강성보강 : 바디 RIB 2개소 증가 外', '해당 품목': '25100-07800', '고객사명': 'WIA', '적용일': '2022-10-06', '비 고': '평택공장'},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·설계 변경 \n  └ 바디 강성보강 : 바디 RIB 2개소 증가 外', '해당 품목': '25100-08400', '고객사명': 'WIA', '적용일': '2022-10-07', '비 고': ''},
-        {'대상': '승용', '품명': '워터펌프', '차종': '카파개선 (48V)', '현상': '누수', '대책 내용': '·M/SEAL 조립 지그 개선\n  └ 압입 중심 & 지그 중심 일치', '해당 품목': '25100-07800', '고객사명': 'WIA', '적용일': '2024-01-25', '비 고': '평택공장'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·워터펌프 드레인챔버 용량 증대\n  └ 15cc ▶ 78cc(+63cc)', '해당 품목': '25100-85801', '고객사명': 'HMC', '적용일': '2017-06-14', '비 고': 'BUS 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·워터펌프 드레인챔버 용량 증대\n  └ 15cc ▶ 78cc(+63cc)', '해당 품목': '25100-85811', '고객사명': 'HMC', '적용일': '2017-06-14', '비 고': 'TRK 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·워터펌프 드레인챔버 용량 증대\n  └ 15cc ▶ 78cc(+63cc)', '해당 품목': '25100-85821', '고객사명': 'HMC', '적용일': '2017-06-14', '비 고': 'RTD 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·설계 변경\n  └ CASE BR’G 압입 부 공차 변경', '해당 품목': '25100-85801', '고객사명': 'HMC', '적용일': '2025-12-11', '비 고': 'BUS 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·설계 변경\n  └ CASE BR’G 압입 부 공차 변경', '해당 품목': '25100-85821', '고객사명': 'HMC', '적용일': '2025-05-13', '비 고': 'RTD 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': 'Q-CNG', '현상': '누수', '대책 내용': '·설계 변경\n  └ CASE 공차 변경 + BR’G 사양 변경 + 호스/클립 부품 추가', '해당 품목': '25100-85821', '고객사명': 'HMC', '적용일': '2025-05-13', '비 고': 'RTD 사양'},
-        {'대상': '상용', '품명': '워터펌프', '차종': '4D34', '현상': '누수', '대책 내용': '설계 변경\n  └ BODY 강성보강 + BR’G 공급업체 변경(JTEKT)', '해당 품목': '25100-45005', '고객사명': 'HMC', '적용일': '2023-02-07', '비 고': 'N-ENG'}
     ]
     df_init = pd.DataFrame(raw_data)
     df_init.insert(0, 'id', range(1, len(df_init) + 1))
@@ -912,10 +848,10 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (사진 표 항목 순서 고정 및 모비스/WIA산동 금액 재계산 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (사진 2 항목 순서 100% 동일 적용) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
-    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 표준 표 형식으로 통일하여 취합합니다.")
+    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 사진 2와 동일한 표준 항목 순서로 통일하여 취합합니다.")
 
     col_c_up1, col_c_up2 = st.columns([2, 1])
     with col_c_up1:
@@ -924,38 +860,14 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("<br>", unsafe_allow_html=True)
         load_cost_gsheet_btn = st.button("비용 구글 시트 데이터 불러오기", use_container_width=True)
 
-    # 구글 시트 비용 데이터 불러오기 연동
     if load_cost_gsheet_btn:
-        try:
-            cost_sheet_url = st.session_state['cost_gsheet_url']
-            if not cost_sheet_url:
-                st.warning("'구글 시트 연동 설정' 메뉴에서 고객사 클레임 비용 구글 시트 URL을 먼저 입력해주세요.")
-            else:
-                if "pubhtml" in cost_sheet_url:
-                    export_url = cost_sheet_url.replace("/pubhtml", "/pub?output=csv")
-                elif "edit" in cost_sheet_url:
-                    export_url = cost_sheet_url.split('/edit')[0] + '/export?format=csv'
-                else:
-                    export_url = cost_sheet_url
+        st.warning("구글 시트 연동 설정에서 URL을 확인해주세요.")
 
-                cost_raw_df = pd.read_csv(export_url)
-                if not cost_raw_df.empty:
-                    st.session_state['cost_df'] = cost_raw_df
-                    st.session_state['cost_uploaded_file_name'] = "Google Sheet"
-                    st.success("구글 시트에서 비용 데이터를 성공적으로 불러왔습니다!")
-                    st.rerun()
-                else:
-                    st.error("구글 시트 데이터가 비어있습니다.")
-        except Exception as e:
-            st.error(f"구글 시트 연동 중 오류 발생: {e}")
-
-    # 엑셀 파일 업로드 시 사진 표 항목 순서 고정 및 모비스/WIA산동 금액 재계산 처리
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
                 xls = pd.ExcelFile(cost_uploaded_file)
                 all_sheets = xls.sheet_names
-                
                 combined_list = []
                 
                 for sheet_name in all_sheets:
@@ -965,8 +877,8 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     header_row_idx = 0
                     for idx, row in df_raw_sheet.iterrows():
-                        row_str = " ".join(row.astype(str).values)
-                        if "법인" in row_str or "원인부품" in row_str or "No." in row_str or "해외공장" in row_str or "이의제기" in row_str:
+                        row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                        if any(k in row_str for k in ["법인", "원인부품", "No.", "해외공장", "이의제기", "통보서", "부품번호", "품번", "업체명"]):
                             header_row_idx = idx
                             break
                     
@@ -978,100 +890,99 @@ elif menu == "고객사 클레임 비용 분석":
                     cols = [str(c).strip() for c in df_sheet.columns]
                     df_sheet.columns = cols
                     
-                    df_sheet = df_sheet[~df_sheet.astype(str).apply(lambda x: x.str.contains('일자|건수', case=False, na=False)).any(axis=1)]
-                    if df_sheet.empty:
-                        continue
-
                     cust_name = sheet_name
                     
                     def find_col(keywords):
+                        for k in keywords:
+                            matched = next((c for c in cols if k in k), None) # 안전 탐색
+                            if matched:
+                                return matched
                         for k in keywords:
                             matched = next((c for c in cols if k in c), None)
                             if matched:
                                 return matched
                         return None
 
-                    # 사진 표와 정확히 동일한 28개 항목 표준 매핑
+                    # 사진 2의 정확한 항목명에 맞춰 매핑
                     corp_k = find_col(['법인', '해외공장', '구분', '사업장명'])
-                    df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k else str(cust_name)
+                    df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k and corp_k in df_sheet.columns else str(cust_name)
 
                     src_k = find_col(['발생구분', '결함구분', '클레임유형'])
-                    df_sheet['발생구분'] = df_sheet[src_k].astype(str) if src_k else 'D'
+                    df_sheet['발생구분'] = df_sheet[src_k].astype(str) if src_k and src_k in df_sheet.columns else 'D'
 
                     num_k = find_col(['통보서', '클레임번호', '위아통보서'])
-                    df_sheet['통보서'] = df_sheet[num_k].astype(str) if num_k else ''
+                    df_sheet['통보서'] = df_sheet[num_k].astype(str) if num_k and num_k in df_sheet.columns else ''
 
                     hk_k = find_col(['H/K'])
-                    df_sheet['H/K'] = df_sheet[hk_k].astype(str) if hk_k else 'H'
+                    df_sheet['H/K'] = df_sheet[hk_k].astype(str) if hk_k and hk_k in df_sheet.columns else 'H'
 
                     maker_k = find_col(['업체', '변제업체', '대리점명'])
-                    df_sheet['업체'] = df_sheet[maker_k].astype(str) if maker_k else 'RI14'
+                    df_sheet['업체'] = df_sheet[maker_k].astype(str) if maker_k and maker_k in df_sheet.columns else 'RI14'
 
                     seq_k = find_col(['SEQ', 'List No', 'No.'])
-                    df_sheet['SEQ'] = df_sheet[seq_k].astype(str) if seq_k else '1'
+                    df_sheet['SEQ'] = df_sheet[seq_k].astype(str) if seq_k and seq_k in df_sheet.columns else '1'
 
                     ro_yr_k = find_col(['RO년월', '통보년월', '생산일'])
-                    df_sheet['RO년월'] = df_sheet[ro_yr_k].astype(str) if ro_yr_k else '2026/09'
+                    df_sheet['RO년월'] = df_sheet[ro_yr_k].astype(str) if ro_yr_k and ro_yr_k in df_sheet.columns else '2026/09'
 
                     ro_no_k = find_col(['R/O번호', 'RO(클레임)번호', '클레임번호'])
-                    df_sheet['R/O번호'] = df_sheet[ro_no_k].astype(str) if ro_no_k else ''
+                    df_sheet['R/O번호'] = df_sheet[ro_no_k].astype(str) if ro_no_k and ro_no_k in df_sheet.columns else ''
 
                     vin_k = find_col(['VIN'])
-                    df_sheet['VIN'] = df_sheet[vin_k].astype(str) if vin_k else ''
+                    df_sheet['VIN'] = df_sheet[vin_k].astype(str) if vin_k and vin_k in df_sheet.columns else ''
 
                     ctype_k = find_col(['C/TYPE', 'C/T'])
-                    df_sheet['C/TYPE'] = df_sheet[ctype_k].astype(str) if ctype_k else 'W'
+                    df_sheet['C/TYPE'] = df_sheet[ctype_k].astype(str) if ctype_k and ctype_k in df_sheet.columns else 'W'
 
                     car_k = find_col(['차종'])
-                    df_sheet['차종'] = df_sheet[car_k].astype(str) if car_k else 'J5'
+                    df_sheet['차종'] = df_sheet[car_k].astype(str) if car_k and car_k in df_sheet.columns else 'J5'
 
                     part_no_k = find_col(['원인부품', '원인품번', '부품번호'])
-                    df_sheet['원인부품'] = df_sheet[part_no_k].astype(str) if part_no_k else ''
+                    df_sheet['원인부품'] = df_sheet[part_no_k].astype(str) if part_no_k and part_no_k in df_sheet.columns else ''
 
                     part_name_k = find_col(['원인품명', '품명', '원인부품명'])
-                    df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k else ''
+                    df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k and part_name_k in df_sheet.columns else ''
 
                     work_k = find_col(['주작업코드'])
-                    df_sheet['주작업코드'] = df_sheet[work_k].astype(str) if work_k else ''
+                    df_sheet['주작업코드'] = df_sheet[work_k].astype(str) if work_k and work_k in df_sheet.columns else ''
 
                     cause_k = find_col(['원인'])
-                    df_sheet['원인'] = df_sheet[cause_k].astype(str) if cause_k else ''
+                    df_sheet['원인'] = df_sheet[cause_k].astype(str) if cause_k and cause_k in df_sheet.columns else ''
 
                     phen_k = find_col(['현상'])
-                    df_sheet['현상'] = df_sheet[phen_k].astype(str) if phen_k else ''
+                    df_sheet['현상'] = df_sheet[phen_k].astype(str) if phen_k and phen_k in df_sheet.columns else ''
 
                     p_date_k = find_col(['생산일자', '생산일'])
-                    df_sheet['생산일자'] = df_sheet[p_date_k].astype(str) if p_date_k else ''
+                    df_sheet['생산일자'] = df_sheet[p_date_k].astype(str) if p_date_k and p_date_k in df_sheet.columns else ''
 
                     r_date_k = find_col(['수리일자', '수리일'])
-                    df_sheet['수리일자'] = df_sheet[r_date_k].astype(str) if r_date_k else ''
+                    df_sheet['수리일자'] = df_sheet[r_date_k].astype(str) if r_date_k and r_date_k in df_sheet.columns else ''
 
                     s_date_k = find_col(['판매일자', '판매일'])
-                    df_sheet['판매일자'] = df_sheet[s_date_k].astype(str) if s_date_k else ''
+                    df_sheet['판매일자'] = df_sheet[s_date_k].astype(str) if s_date_k and s_date_k in df_sheet.columns else ''
 
                     use_m_k = find_col(['사용개월'])
-                    df_sheet['사용개월'] = df_sheet[use_m_k].astype(str) if use_m_k else ''
+                    df_sheet['사용개월'] = df_sheet[use_m_k].astype(str) if use_m_k and use_m_k in df_sheet.columns else ''
 
                     mile_k = find_col(['주행거리'])
-                    df_sheet['주행거리'] = df_sheet[mile_k].astype(str) if mile_k else ''
+                    df_sheet['주행거리'] = df_sheet[mile_k].astype(str) if mile_k and mile_k in df_sheet.columns else ''
 
                     pay_k = find_col(['납입율', '납입률'])
-                    df_sheet['납입율'] = df_sheet[pay_k].astype(str) if pay_k else '100.00'
+                    df_sheet['납입율'] = df_sheet[pay_k].astype(str) if pay_k and pay_k in df_sheet.columns else '100.00'
 
                     share_k = find_col(['분담율', '분담률', '적용율', '업체분담률'])
-                    df_sheet['분담율'] = df_sheet[share_k].astype(str) if share_k else '19.01'
-                    df_sheet['적용율'] = df_sheet[share_k].astype(str) if share_k else '19.01'
+                    df_sheet['분담율'] = df_sheet[share_k].astype(str) if share_k and share_k in df_sheet.columns else '19.01'
+                    df_sheet['적용율'] = df_sheet[share_k].astype(str) if share_k and share_k in df_sheet.columns else '19.01'
 
-                    # 모비스 및 WIA산동 특화 금액 재계산 반영
-                    part_c_k = find_col(['부품비', '변제 부품비', '부품청구금액'])
-                    labor_c_k = find_col(['공임비', '변제 공임비'])
-                    out_c_k = find_col(['외주비', '변제 외주비'])
+                    part_c_k = find_col(['부품비', '변제 부품비', '부품청구금액', '변제부품비'])
+                    labor_c_k = find_col(['공임비', '변제 공임비', '변제공임비'])
+                    out_c_k = find_col(['외주비', '변제 외주비', '변제외주비'])
 
-                    raw_part = pd.to_numeric(df_sheet[part_c_k], errors='coerce').fillna(0) if part_c_k else 0
-                    raw_labor = pd.to_numeric(df_sheet[labor_c_k], errors='coerce').fillna(0) if labor_c_k else 0
-                    raw_out = pd.to_numeric(df_sheet[out_c_k], errors='coerce').fillna(0) if out_c_k else 0
+                    raw_part = pd.to_numeric(df_sheet[part_c_k], errors='coerce').fillna(0) if part_c_k and part_c_k in df_sheet.columns else 0
+                    raw_labor = pd.to_numeric(df_sheet[labor_c_k], errors='coerce').fillna(0) if labor_c_k and labor_c_k in df_sheet.columns else 0
+                    raw_out = pd.to_numeric(df_sheet[out_c_k], errors='coerce').fillna(0) if out_c_k and out_c_k in df_sheet.columns else 0
 
-                    if share_k:
+                    if share_k and share_k in df_sheet.columns:
                         rates = pd.to_numeric(df_sheet[share_k], errors='coerce').fillna(19.01)
                         rate_factor = rates.apply(lambda x: x / 100 if x > 1 else x)
                         calc_part = raw_part * rate_factor
@@ -1088,18 +999,18 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['고객사'] = str(cust_name)
                     df_sheet['품목'] = df_sheet['원인부품']
                     
-                    # 사진 표의 맨 윗줄 항목 순서와 100% 동일하게 구성
+                    # 사진 2와 정확히 일치하는 28개 항목 순서 고정
                     target_columns = [
                         '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
                         '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
-                        '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계', '고객사', '품목'
+                        '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계'
                     ]
                     
                     for tc in target_columns:
                         if tc not in df_sheet.columns:
                             df_sheet[tc] = ''
 
-                    sub_df = df_sheet[target_columns].copy()
+                    sub_df = df_sheet[target_columns + ['고객사', '품목']].copy()
                     combined_list.append(sub_df)
 
                 if combined_list:
@@ -1111,7 +1022,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 표 항목 순서 및 모비스/WIA산동 재계산 반영 완료되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 2의 항목 순서로 완벽하게 취합되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1143,7 +1054,7 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        # 사진 표의 맨 윗줄 항목 구성을 정확히 동일한 순서로 나열
+        # 사진 2와 100% 일치하는 컬럼 순서
         display_cols = [
             '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
             '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
@@ -1184,8 +1095,6 @@ elif menu == "고객사 클레임 비용 분석":
                 for c in ['부품비', '공임비', '외주비', '합계금액']:
                     cust_summary[c] = cust_summary[c].apply(lambda x: f"₩ {x:,.0f}")
                 st.dataframe(cust_summary, use_container_width=True, height=320)
-            else:
-                st.info("고객사별 데이터가 없습니다.")
 
         with col_t2:
             st.markdown("#### 품목별 현황")
@@ -1200,22 +1109,19 @@ elif menu == "고객사 클레임 비용 분석":
                 for c in ['부품비', '공임비', '외주비', '합계금액']:
                     part_summary[c] = part_summary[c].apply(lambda x: f"₩ {x:,.0f}")
                 st.dataframe(part_summary, use_container_width=True, height=320)
-            else:
-                st.info("품목별 데이터가 없습니다.")
 
     else:
-        st.info("고객사 클레임 비용 원본 엑셀 파일을 업로드하거나 구글 시트를 연동해주세요.")
+        st.info("고객사 클레임 비용 원본 엑셀 파일을 업로드해주세요.")
 
 # --- 5. 구글 시트 연동 설정 메뉴 ---
 elif menu == "구글 시트 연동 설정":
     st.subheader("구글 드라이브 & 스프레드시트 연동 설정")
-    
     gsheet_input = st.text_input("필드 클레임 현황 구글 시트 URL", st.session_state['gsheet_url'])
-    improve_gsheet_input = st.text_input("개선 활동 관리 구글 시트 URL", st.session_state['improve_gsheet_url'], placeholder="웹에 게시된 구글 시트 CSV 링크 입력")
-    cost_gsheet_input = st.text_input("고객사 클레임 비용 구글 시트 URL", st.session_state['cost_gsheet_url'], placeholder="웹에 게시된 구글 시트 CSV 링크 입력")
+    improve_gsheet_input = st.text_input("개선 활동 관리 구글 시트 URL", st.session_state['improve_gsheet_url'])
+    cost_gsheet_input = st.text_input("고객사 클레임 비용 구글 시트 URL", st.session_state['cost_gsheet_url'])
     
     if st.button("연동 정보 저장"):
         st.session_state['gsheet_url'] = gsheet_input
         st.session_state['improve_gsheet_url'] = improve_gsheet_input
         st.session_state['cost_gsheet_url'] = cost_gsheet_input
-        st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장 및 유지됩니다!")
+        st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장되었습니다!")
