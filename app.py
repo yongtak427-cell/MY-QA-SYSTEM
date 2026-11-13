@@ -848,10 +848,10 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (사진 2 항목 순서 100% 동일 적용) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
-    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 사진 2와 동일한 표준 항목 순서로 통일하여 취합합니다.")
+    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 사진 2의 표준 항목 순서로 통일하여 취합합니다.")
 
     col_c_up1, col_c_up2 = st.columns([2, 1])
     with col_c_up1:
@@ -894,16 +894,11 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     def find_col(keywords):
                         for k in keywords:
-                            matched = next((c for c in cols if k in k), None) # 안전 탐색
-                            if matched:
-                                return matched
-                        for k in keywords:
                             matched = next((c for c in cols if k in c), None)
                             if matched:
                                 return matched
                         return None
 
-                    # 사진 2의 정확한 항목명에 맞춰 매핑
                     corp_k = find_col(['법인', '해외공장', '구분', '사업장명'])
                     df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k and corp_k in df_sheet.columns else str(cust_name)
 
@@ -940,7 +935,7 @@ elif menu == "고객사 클레임 비용 분석":
                     part_no_k = find_col(['원인부품', '원인품번', '부품번호'])
                     df_sheet['원인부품'] = df_sheet[part_no_k].astype(str) if part_no_k and part_no_k in df_sheet.columns else ''
 
-                    part_name_k = find_col(['원인품명', '품명', '원인부품명'])
+                    part_name_k = find_col(['원인품명', '원인품명', '품명', '원인부품명'])
                     df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k and part_name_k in df_sheet.columns else ''
 
                     work_k = find_col(['주작업코드'])
@@ -999,7 +994,7 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['고객사'] = str(cust_name)
                     df_sheet['품목'] = df_sheet['원인부품']
                     
-                    # 사진 2와 정확히 일치하는 28개 항목 순서 고정
+                    # 첨부 사진 2의 엑셀 1행 표 항목 순서 100% 반영 (28개 항목)
                     target_columns = [
                         '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
                         '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
@@ -1010,7 +1005,7 @@ elif menu == "고객사 클레임 비용 분석":
                         if tc not in df_sheet.columns:
                             df_sheet[tc] = ''
 
-                    sub_df = df_sheet[target_columns + ['고객사', '품목']].copy()
+                    sub_df = df_sheet[target_columns].copy()
                     combined_list.append(sub_df)
 
                 if combined_list:
@@ -1022,7 +1017,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 2의 항목 순서로 완벽하게 취합되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 2의 엑셀 표 항목 순서대로 완벽하게 취합되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1030,31 +1025,66 @@ elif menu == "고객사 클레임 비용 분석":
 
     if not cost_df.empty:
         st.markdown("---")
-        st.markdown("### 🔍 조회 및 검색 필터 (고객사 / 발생구분 / 품목별)")
+        st.markdown("### 🔍 조회 및 검색 필터")
         
+        # 요청하신 필터 항목 구성 (법인, 발생구분, 통보서, H/K, R/O번호, VIN, 차종, 원인부품, 원인품명)
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
-            all_customers = sorted(cost_df['고객사'].dropna().unique().tolist()) if '고객사' in cost_df.columns else []
-            selected_cust_filter = st.multiselect("고객사 선택", all_customers, default=all_customers)
+            all_corps = sorted(cost_df['법인'].dropna().unique().tolist()) if '법인' in cost_df.columns else []
+            selected_corp_filter = st.multiselect("법인", all_corps, default=all_corps)
         with f_col2:
             all_sources = sorted(cost_df['발생구분'].dropna().unique().tolist()) if '발생구분' in cost_df.columns else []
-            selected_source_filter = st.multiselect("발생구분 선택", all_sources, default=all_sources)
+            selected_source_filter = st.multiselect("발생구분", all_sources, default=all_sources)
         with f_col3:
-            all_parts = sorted(cost_df['품목'].dropna().unique().tolist()) if '품목' in cost_df.columns else []
-            selected_part_filter = st.multiselect("품목 선택", all_parts, default=all_parts)
+            all_notices = sorted(cost_df['통보서'].dropna().unique().tolist()) if '통보서' in cost_df.columns else []
+            selected_notice_filter = st.multiselect("통보서", all_notices, default=all_notices)
+
+        f_col4, f_col5, f_col6 = st.columns(3)
+        with f_col4:
+            all_hks = sorted(cost_df['H/K'].dropna().unique().tolist()) if 'H/K' in cost_df.columns else []
+            selected_hk_filter = st.multiselect("H/K", all_hks, default=all_hks)
+        with f_col5:
+            all_ro_nos = sorted(cost_df['R/O번호'].dropna().unique().tolist()) if 'R/O번호' in cost_df.columns else []
+            selected_ro_filter = st.multiselect("R/O번호", all_ro_nos, default=all_ro_nos)
+        with f_col6:
+            all_vins = sorted(cost_df['VIN'].dropna().unique().tolist()) if 'VIN' in cost_df.columns else []
+            selected_vin_filter = st.multiselect("VIN", all_vins, default=all_vins)
+
+        f_col7, f_col8, f_col9 = st.columns(3)
+        with f_col7:
+            all_cars = sorted(cost_df['차종'].dropna().unique().tolist()) if '차종' in cost_df.columns else []
+            selected_car_filter = st.multiselect("차종", all_cars, default=all_cars)
+        with f_col8:
+            all_part_nos = sorted(cost_df['원인부품'].dropna().unique().tolist()) if '원인부품' in cost_df.columns else []
+            selected_partno_filter = st.multiselect("원인부품", all_part_nos, default=all_part_nos)
+        with f_col9:
+            all_part_names = sorted(cost_df['원인품명'].dropna().unique().tolist()) if '원인품명' in cost_df.columns else []
+            selected_partname_filter = st.multiselect("원인품명", all_part_names, default=all_part_names)
 
         filtered_cost = cost_df.copy()
-        if '고객사' in filtered_cost.columns and selected_cust_filter:
-            filtered_cost = filtered_cost[filtered_cost['고객사'].isin(selected_cust_filter)]
+        if '법인' in filtered_cost.columns and selected_corp_filter:
+            filtered_cost = filtered_cost[filtered_cost['법인'].isin(selected_corp_filter)]
         if '발생구분' in filtered_cost.columns and selected_source_filter:
             filtered_cost = filtered_cost[filtered_cost['발생구분'].isin(selected_source_filter)]
-        if '품목' in filtered_cost.columns and selected_part_filter:
-            filtered_cost = filtered_cost[filtered_cost['품목'].isin(selected_part_filter)]
+        if '통보서' in filtered_cost.columns and selected_notice_filter:
+            filtered_cost = filtered_cost[filtered_cost['통보서'].isin(selected_notice_filter)]
+        if 'H/K' in filtered_cost.columns and selected_hk_filter:
+            filtered_cost = filtered_cost[filtered_cost['H/K'].isin(selected_hk_filter)]
+        if 'R/O번호' in filtered_cost.columns and selected_ro_filter:
+            filtered_cost = filtered_cost[filtered_cost['R/O번호'].isin(selected_ro_filter)]
+        if 'VIN' in filtered_cost.columns and selected_vin_filter:
+            filtered_cost = filtered_cost[filtered_cost['VIN'].isin(selected_vin_filter)]
+        if '차종' in filtered_cost.columns and selected_car_filter:
+            filtered_cost = filtered_cost[filtered_cost['차종'].isin(selected_car_filter)]
+        if '원인부품' in filtered_cost.columns and selected_partno_filter:
+            filtered_cost = filtered_cost[filtered_cost['원인부품'].isin(selected_partno_filter)]
+        if '원인품명' in filtered_cost.columns and selected_partname_filter:
+            filtered_cost = filtered_cost[filtered_cost['원인품명'].isin(selected_partname_filter)]
 
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        # 사진 2와 100% 일치하는 컬럼 순서
+        # 사진 2의 엑셀 1행 표 항목 순서와 100% 일치
         display_cols = [
             '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
             '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
@@ -1084,8 +1114,8 @@ elif menu == "고객사 클레임 비용 분석":
 
         with col_t1:
             st.markdown("#### 고객사별 현황")
-            if '고객사' in filtered_cost.columns and '합계' in filtered_cost.columns:
-                cust_summary = filtered_cost.groupby('고객사').agg(
+            if '법인' in filtered_cost.columns and '합계' in filtered_cost.columns:
+                cust_summary = filtered_cost.groupby('법인').agg(
                     부품비=('부품비', 'sum'),
                     공임비=('공임비', 'sum'),
                     외주비=('외주비', 'sum'),
@@ -1097,9 +1127,9 @@ elif menu == "고객사 클레임 비용 분석":
                 st.dataframe(cust_summary, use_container_width=True, height=320)
 
         with col_t2:
-            st.markdown("#### 품목별 현황")
-            if '품목' in filtered_cost.columns and '합계' in filtered_cost.columns:
-                part_summary = filtered_cost.groupby('품목').agg(
+            st.markdown("#### 원인부품별 현황")
+            if '원인부품' in filtered_cost.columns and '합계' in filtered_cost.columns:
+                part_summary = filtered_cost.groupby(['원인부품', '원인품명']).agg(
                     부품비=('부품비', 'sum'),
                     공임비=('공임비', 'sum'),
                     외주비=('외주비', 'sum'),
