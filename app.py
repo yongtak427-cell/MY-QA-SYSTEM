@@ -912,7 +912,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 및 금액/합계 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 메타데이터 제거 및 동적 취합 완벽 반영) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(새로 추가되는 고객사 및 월별 법인 시트 포함)**를 동적으로 자동 탐색하여 통합 취합합니다.")
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 모든 시트 동적 취합 처리 (헤더 자동 감지 및 4번째 행 기준 파싱)
+    # 엑셀 파일 업로드 시 모든 시트 동적 취합 처리 (상단 요약/메타데이터 행 완전 제거 및 헤더 정밀 탐색)
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -959,18 +959,19 @@ elif menu == "고객사 클레임 비용 분석":
                 combined_list = []
                 
                 for sheet_name in all_sheets:
-                    # 먼저 전체를 헤더 없이 읽어서 실제 컬럼 헤더 행(예: '법인', '통보서' 등이 있는 행)을 찾음
                     df_raw_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=None)
                     if df_raw_sheet.empty:
                         continue
                     
-                    header_row_idx = 0
+                    # 실제 헤더 행('법인', '통보서', '발생구분' 등이 포함된 행)을 동적으로 탐색
+                    header_row_idx = None
                     for idx, row in df_raw_sheet.iterrows():
                         row_str = " ".join(row.astype(str).values)
                         if "법인" in row_str or "통보서" in row_str or "발생구분" in row_str:
                             header_row_idx = idx
                             break
-                    else:
+                    
+                    if header_row_idx is None:
                         header_row_idx = 4 if len(df_raw_sheet) > 4 else 0
 
                     df_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=header_row_idx)
@@ -981,6 +982,15 @@ elif menu == "고객사 클레임 비용 분석":
                     cols = [str(c).strip() for c in df_sheet.columns]
                     df_sheet.columns = cols
                     
+                    # 엑셀 상단 메타데이터(일자, 건수 등)가 행으로 섞여있다면 확실하게 제거
+                    if '법인' in df_sheet.columns:
+                        df_sheet = df_sheet[df_sheet['법인'].astype(str).str.contains("일자|건수|None|nan", case=False, na=False) == False]
+                    if '통보서' in df_sheet.columns:
+                        df_sheet = df_sheet[df_sheet['통보서'].astype(str).str.contains("일자|건수|None|nan", case=False, na=False) == False]
+
+                    if df_sheet.empty:
+                        continue
+
                     # 고객사명 동적 결정
                     cust_name = sheet_name
                     cust_col_match = next((c for c in cols if '고객사' in c), None)
@@ -1004,7 +1014,7 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['통보서'] = df_sheet[num_col].astype(str) if num_col else ''
                     
                     # 부품비, 공임비, 외주비 찾기
-                    part_cost_col = next((c for c in cols if '부품비' in c or '부품' in c and '금액' in c), None)
+                    part_cost_col = next((c for c in cols if '부품비' in c or ('부품' in c and '금액' in c)), None)
                     labor_cost_col = next((c for c in cols if '공임비' in c or '공임' in c), None)
                     outsourcing_col = next((c for c in cols if '외주비' in c or '외주' in c), None)
                     
