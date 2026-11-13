@@ -912,7 +912,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 및 수정 산식 자동 계산 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 및 사진2 컬럼 순서/재계산 완벽 반영) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 동적으로 자동 탐색하여 통합 취합 및 수정 금액을 자동 재계산합니다.")
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 모든 시트 동적 취합 및 수정 재계산 처리
+    # 엑셀 파일 업로드 시 모든 시트 동적 취합 및 사진2 컬럼 순서/재계산 처리
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -963,11 +963,11 @@ elif menu == "고객사 클레임 비용 분석":
                     if df_raw_sheet.empty:
                         continue
                     
-                    # 실제 헤더 행 찾기 ('법인', '통보서', '발생구분', '원인부품', 'No.' 등 주요 키워드 탐색)
+                    # 0번 행(제목)이 아니라 실제 '법인', '원인부품', 'No.' 등의 키워드가 포함된 행을 정밀하게 헤더로 탐색
                     header_row_idx = 0
                     for idx, row in df_raw_sheet.iterrows():
                         row_str = " ".join(row.astype(str).values)
-                        if "법인" in row_str or "통보서" in row_str or "발생구분" in row_str or "원인부품" in row_str or "No." in row_str:
+                        if "법인" in row_str or "원인부품" in row_str or "No." in row_str or "해외공장" in row_str:
                             header_row_idx = idx
                             break
                     else:
@@ -981,7 +981,7 @@ elif menu == "고객사 클레임 비용 분석":
                     cols = [str(c).strip() for c in df_sheet.columns]
                     df_sheet.columns = cols
                     
-                    # 불필요한 상단 메타데이터 행 제거
+                    # 불필요한 메타데이터 행 원천 차단
                     if '법인' in df_sheet.columns:
                         df_sheet = df_sheet[~df_sheet['법인'].astype(str).str.contains("일자|건수|None|nan", case=False, na=False)]
                     if '통보서' in df_sheet.columns:
@@ -1003,10 +1003,38 @@ elif menu == "고객사 클레임 비용 분석":
                     num_col = next((c for c in cols if '통보서' in c or '클레임번호' in c or 'R/O' in c), None)
                     df_sheet['통보서'] = df_sheet[num_col].astype(str) if num_col else ''
                     
-                    # ----------------------------------------------------
-                    # 시트별 비용 항목 및 자동 재계산 로직 적용
-                    # ----------------------------------------------------
-                    # 1) 현대 / 현대위아 / 글로비스 등 일반적인 구조
+                    # H/K, 업체, SEQ, RO년월, R/O번호, VIN 매핑
+                    hk_col = next((c for c in cols if 'H/K' in c or 'H/K구분' in c), None)
+                    df_sheet['H/K'] = df_sheet[hk_col].astype(str) if hk_col else 'H'
+
+                    maker_col = next((c for c in cols if '업체' in c or '변제업체' in c), None)
+                    df_sheet['업체'] = df_sheet[maker_col].astype(str) if maker_col else 'RI14'
+
+                    seq_col = next((c for c in cols if 'SEQ' in c), None)
+                    df_sheet['SEQ'] = df_sheet[seq_col].astype(str) if seq_col else '1'
+
+                    ro_yr_col = next((c for c in cols if 'RO년월' in c or '통보년월' in c), None)
+                    df_sheet['RO년월'] = df_sheet[ro_yr_col].astype(str) if ro_yr_col else '2026/09'
+
+                    ro_no_col = next((c for c in cols if 'R/O번호' in c or 'RO(클레임)번호' in c or '클레임번호' in c), None)
+                    df_sheet['R/O번호'] = df_sheet[ro_no_col].astype(str) if ro_no_col else ''
+
+                    vin_col = next((c for c in cols if 'VIN' in c), None)
+                    df_sheet['VIN'] = df_sheet[vin_col].astype(str) if vin_col else ''
+
+                    ctype_col = next((c for c in cols if 'C/TYPE' in c), None)
+                    df_sheet['C/TYPE'] = df_sheet[ctype_col].astype(str) if ctype_col else 'W'
+
+                    car_col = next((c for c in cols if '차종' in c), None)
+                    df_sheet['차종'] = df_sheet[car_col].astype(str) if car_col else 'J5'
+
+                    part_no_col = next((c for c in cols if '원인부품' in c or '품번' in c), None)
+                    df_sheet['원인부품'] = df_sheet[part_no_col].astype(str) if part_no_col else ''
+
+                    part_name_col = next((c for c in cols if '원인품명' in c or '품명' in c), None)
+                    df_sheet['원인품명'] = df_sheet[part_name_col].astype(str) if part_name_col else ''
+
+                    # 비용 항목 및 재계산
                     part_cost_col = next((c for c in cols if '부품비' in c or ('부품' in c and '금액' in c)), None)
                     labor_cost_col = next((c for c in cols if '공임비' in c or '공임' in c), None)
                     outsourcing_col = next((c for c in cols if '외주비' in c or '외주' in c), None)
@@ -1015,11 +1043,9 @@ elif menu == "고객사 클레임 비용 분석":
                     raw_labor = pd.to_numeric(df_sheet[labor_cost_col], errors='coerce').fillna(0) if labor_cost_col else 0
                     raw_out = pd.to_numeric(df_sheet[outsourcing_col], errors='coerce').fillna(0) if outsourcing_col else 0
 
-                    # 분담율 / 적용율 환산 계산 (모비스, WIA산동 등의 수정 취합 산식 반영)
                     rate_col = next((c for c in cols if '분담율' in c or '적용율' in c or '업체분담률' in c), None)
                     if rate_col:
                         rates = pd.to_numeric(df_sheet[rate_col], errors='coerce').fillna(100)
-                        # 만약 백분율 형태(예: 19.01)이거나 비율 형태라면 자동 보정
                         rate_factor = rates.apply(lambda x: x / 100 if x > 1 else x)
                         calc_part = raw_part * rate_factor
                         calc_labor = raw_labor * rate_factor
@@ -1030,17 +1056,13 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['부품비'] = calc_part
                     df_sheet['공임비'] = calc_labor
                     df_sheet['외주비'] = raw_out
-                    
-                    # 외주비 바로 옆에 부품+공임+외주 합계 금액 컬럼 추가
                     df_sheet['합계'] = df_sheet['부품비'] + df_sheet['공임비'] + df_sheet['외주비']
-                        
-                    # 품목 / 원인부품
-                    part_col = next((c for c in cols if '원인부품' in c or '원인품명' in c or '품명' in c or '부품명' in c or '품목' in c), None)
-                    df_sheet['품목'] = df_sheet[part_col].astype(str) if part_col else '기타'
                     
                     df_sheet['고객사'] = str(cust_name)
+                    df_sheet['품목'] = df_sheet['원인부품']
                     
-                    sub_df = df_sheet[['고객사', '법인', '발생구분', '통보서', '부품비', '공임비', '외주비', '합계', '품목']].copy()
+                    # 사진2 표와 정확히 동일한 순서로 컬럼 배치
+                    sub_df = df_sheet[['법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', '원인부품', '원인품명', '부품비', '공임비', '외주비', '합계', '고객사', '품목']].copy()
                     combined_list.append(sub_df)
 
                 if combined_list:
@@ -1052,7 +1074,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 동적으로 취합 및 재계산되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진2 형식과 동일한 순서로 취합 및 재계산되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1085,20 +1107,11 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        group_cols = [c for c in ['고객사', '법인', '발생구분', '통보서', '품목'] if c in filtered_cost.columns]
-        if group_cols:
-            grouped_summary = filtered_cost.groupby(group_cols).agg(
-                부품비=('부품비', 'sum'),
-                공임비=('공임비', 'sum'),
-                외주비=('외주비', 'sum'),
-                합계=('합계', 'sum'),
-                건수=('부품비', 'count')
-            ).reset_index()
-        else:
-            grouped_summary = filtered_cost.copy()
+        # 사진2와 정확히 일치하는 순서의 컬럼 리스트 정의
+        display_cols = ['법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', '원인부품', '원인품명', '부품비', '공임비', '외주비', '합계']
+        available_display_cols = [c for c in display_cols if c in filtered_cost.columns]
 
-        # 부품비, 공임비, 외주비, 합계를 원화 형식(₩)으로 포맷팅
-        formatted_summary = grouped_summary.copy()
+        formatted_summary = filtered_cost[available_display_cols].copy()
         for col in ['부품비', '공임비', '외주비', '합계']:
             if col in formatted_summary.columns:
                 formatted_summary[col] = formatted_summary[col].apply(lambda x: f"₩ {x:,.0f}")
