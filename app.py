@@ -912,7 +912,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 & 사진1 구조 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 동적 취합 및 안정적 데이터 가공) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(새로 추가되는 고객사 및 월별 법인 시트 포함)**를 동적으로 자동 탐색하여 통합 취합합니다.")
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 동적 취합 처리 (새로운 고객사 시트가 늘어나도 자동 반영)
+    # 엑셀 파일 업로드 시 동적 취합 처리 (수정된 로직)
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -965,7 +965,7 @@ elif menu == "고객사 클레임 비용 분석":
                         
                     cols = df_sheet.columns
                     
-                    # 고객사명 동적 결정 (시트 이름 기본 사용, 내부에 고객사 컬럼이 있으면 우선 반영)
+                    # 고객사명 동적 결정
                     cust_name = sheet_name
                     if '고객사' in cols:
                         valid_cust = df_sheet['고객사'].dropna()
@@ -974,21 +974,24 @@ elif menu == "고객사 클레임 비용 분석":
                     elif '최종원인업체' in cols:
                         cust_name = "모비스"
                     
-                    # 발생처 찾기
+                    # 발생처 찾기 (없으면 기본값 'D')
                     source_col = next((c for c in cols if '발생' in str(c)), None)
-                    df_sheet['발생처'] = df_sheet[source_col].astype(str) if source_col else 'D'
+                    df_sheet['발생처'] = df_sheet[source_col].astype(str) if source_col and source_col in df_sheet.columns else 'D'
                     
                     # 통보서 번호 찾기
                     num_col = next((c for c in cols if '통보서' in str(c) or '클레임번호' in str(c) or 'R/O' in str(c)), None)
-                    df_sheet['통보서번호'] = df_sheet[num_col].astype(str) if num_col else ''
+                    df_sheet['통보서번호'] = df_sheet[num_col].astype(str) if num_col and num_col in df_sheet.columns else ''
                     
-                    # 금액 찾기
+                    # 금액 찾기 (청구금액, 합계 등 포함)
                     amt_col = next((c for c in cols if '금액' in str(c) or '합계' in str(c) or '청구' in str(c)), None)
-                    df_sheet['금액'] = pd.to_numeric(df_sheet[amt_col], errors='coerce').fillna(0) if amt_col else 0
-                    
+                    if amt_col and amt_col in df_sheet.columns:
+                        df_sheet['금액'] = pd.to_numeric(df_sheet[amt_col], errors='coerce').fillna(0)
+                    else:
+                        df_sheet['금액'] = 0
+                        
                     # 품목 찾기
-                    part_col = next((c for c in cols if '품명' in str(c) or '부품명' in str(c)), None)
-                    df_sheet['품목'] = df_sheet[part_col].astype(str) if part_col else '기타'
+                    part_col = next((c for c in cols if '품명' in str(c) or '부품명' in str(c) or '품목' in str(c)), None)
+                    df_sheet['품목'] = df_sheet[part_col].astype(str) if part_col and part_col in df_sheet.columns else '기타'
                     
                     df_sheet['고객사'] = str(cust_name)
                     
@@ -1029,7 +1032,7 @@ elif menu == "고객사 클레임 비용 분석":
         ]
 
         st.markdown("---")
-        st.markdown("### 📋 1. 필드 클레임 취합 (사진1 형식)")
+        st.markdown("### 📋 1. 필드 클레임 취합")
         
         grouped_summary = filtered_cost.groupby(['고객사', '발생처', '통보서번호']).agg(
             금액=('금액', 'sum'),
