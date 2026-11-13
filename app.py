@@ -912,7 +912,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (모든 시트 강제 정밀 파싱 및 사진2 형식 완벽 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (파일 업로드 세션 영구 보장 및 모든 시트 정밀 취합) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 누락 없이 통합 취합하여 표준 표 형식으로 출력합니다.")
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 모든 시트 정밀 파싱 및 표준화 처리
+    # 엑셀 파일 업로드 시 세션 영구 저장 및 모든 시트 정밀 파싱 처리
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -959,12 +959,10 @@ elif menu == "고객사 클레임 비용 분석":
                 combined_list = []
                 
                 for sheet_name in all_sheets:
-                    # 시트별 raw 데이터 로드
                     df_raw_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=None)
-                    if df_raw_sheet.empty or len(df_raw_sheet) < 2:
+                    if df_raw_sheet.empty or len(df_raw_sheet) < 1:
                         continue
                     
-                    # 시트별 헤더 행 정밀 탐색 (법인, 원인부품, No., 해외공장 등)
                     header_row_idx = 0
                     for idx, row in df_raw_sheet.iterrows():
                         row_str = " ".join(row.astype(str).values)
@@ -980,14 +978,12 @@ elif menu == "고객사 클레임 비용 분석":
                     cols = [str(c).strip() for c in df_sheet.columns]
                     df_sheet.columns = cols
                     
-                    # 상단 메타데이터 행 제거
                     df_sheet = df_sheet[~df_sheet.astype(str).apply(lambda x: x.str.contains('일자|건수', case=False, na=False)).any(axis=1)]
                     if df_sheet.empty:
                         continue
 
                     cust_name = sheet_name
                     
-                    # 공통 표준 컬럼 매핑 함수
                     def find_col(keywords):
                         for k in keywords:
                             matched = next((c for c in cols if k in c), None)
@@ -995,59 +991,45 @@ elif menu == "고객사 클레임 비용 분석":
                                 return matched
                         return None
 
-                    # 1. 법인
                     corp_k = find_col(['법인', '해외공장', '구분', '사업장명'])
                     df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k else str(cust_name)
 
-                    # 2. 발생구분
                     src_k = find_col(['발생구분', '결함구분', '클레임유형'])
                     df_sheet['발생구분'] = df_sheet[src_k].astype(str) if src_k else 'D'
 
-                    # 3. 통보서
                     num_k = find_col(['통보서', '클레임번호', '위아통보서'])
                     df_sheet['통보서'] = df_sheet[num_k].astype(str) if num_k else ''
 
-                    # 4. H/K
                     hk_k = find_col(['H/K'])
                     df_sheet['H/K'] = df_sheet[hk_k].astype(str) if hk_k else 'H'
 
-                    # 5. 업체
                     maker_k = find_col(['업체', '변제업체', '대리점명'])
                     df_sheet['업체'] = df_sheet[maker_k].astype(str) if maker_k else 'RI14'
 
-                    # 6. SEQ
                     seq_k = find_col(['SEQ', 'List No', 'No.'])
                     df_sheet['SEQ'] = df_sheet[seq_k].astype(str) if seq_k else '1'
 
-                    # 7. RO년월
                     ro_yr_k = find_col(['RO년월', '통보년월', '생산일'])
                     df_sheet['RO년월'] = df_sheet[ro_yr_k].astype(str) if ro_yr_k else '2026/09'
 
-                    # 8. R/O번호
                     ro_no_k = find_col(['R/O번호', 'RO(클레임)번호', '클레임번호'])
                     df_sheet['R/O번호'] = df_sheet[ro_no_k].astype(str) if ro_no_k else ''
 
-                    # 9. VIN
                     vin_k = find_col(['VIN'])
                     df_sheet['VIN'] = df_sheet[vin_k].astype(str) if vin_k else ''
 
-                    # 10. C/TYPE
                     ctype_k = find_col(['C/TYPE', 'C/T'])
                     df_sheet['C/TYPE'] = df_sheet[ctype_k].astype(str) if ctype_k else 'W'
 
-                    # 11. 차종
                     car_k = find_col(['차종'])
                     df_sheet['차종'] = df_sheet[car_k].astype(str) if car_k else 'J5'
 
-                    # 12. 원인부품
                     part_no_k = find_col(['원인부품', '원인품번', '부품번호'])
                     df_sheet['원인부품'] = df_sheet[part_no_k].astype(str) if part_no_k else ''
 
-                    # 13. 원인품명
                     part_name_k = find_col(['원인품명', '품명', '원인부품명'])
                     df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k else ''
 
-                    # 비용 항목 및 자동 재계산
                     part_c_k = find_col(['부품비', '변제 부품비', '부품청구금액'])
                     labor_c_k = find_col(['공임비', '변제 공임비'])
                     out_c_k = find_col(['외주비', '변제 외주비'])
@@ -1074,7 +1056,6 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['고객사'] = str(cust_name)
                     df_sheet['품목'] = df_sheet['원인부품']
                     
-                    # 사진2와 정확히 동일한 컬럼 순서 및 구성
                     sub_df = df_sheet[['법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', '원인부품', '원인품명', '부품비', '공임비', '외주비', '합계', '고객사', '품목']].copy()
                     combined_list.append(sub_df)
 
@@ -1087,7 +1068,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 모든 시트 누락 없이 사진2 형식과 동일한 순서로 취합되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 성공적으로 취합되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1108,7 +1089,6 @@ elif menu == "고객사 클레임 비용 분석":
             all_parts = sorted(cost_df['품목'].dropna().unique().tolist()) if '품목' in cost_df.columns else []
             selected_part_filter = st.multiselect("품목 선택", all_parts, default=all_parts)
 
-        # 필터 적용
         filtered_cost = cost_df.copy()
         if '고객사' in filtered_cost.columns and selected_cust_filter:
             filtered_cost = filtered_cost[filtered_cost['고객사'].isin(selected_cust_filter)]
