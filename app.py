@@ -851,7 +851,7 @@ elif menu == "개선 활동 관리":
 # --- 4. 고객사 클레임 비용 분석 메뉴 ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
-    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 사진 2의 표준 항목 순서로 통일하여 취합합니다.")
+    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 표준 항목 순서로 통일하여 취합합니다.")
 
     col_c_up1, col_c_up2 = st.columns([2, 1])
     with col_c_up1:
@@ -878,7 +878,7 @@ elif menu == "고객사 클레임 비용 분석":
                     header_row_idx = 0
                     for idx, row in df_raw_sheet.iterrows():
                         row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                        if any(k in row_str for k in ["법인", "원인부품", "No.", "해외공장", "이의제기", "통보서", "부품번호", "품번", "업체명"]):
+                        if any(k in row_str for k in ["법인", "원인부품", "R/O번호", "통보서", "VIN", "차종"]):
                             header_row_idx = idx
                             break
                     
@@ -887,137 +887,90 @@ elif menu == "고객사 클레임 비용 분석":
                     if df_sheet.empty:
                         continue
                         
-                    cols = [str(c).strip() for c in df_sheet.columns]
-                    df_sheet.columns = cols
+                    df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
                     
                     cust_name = sheet_name
                     
-                    def find_col(keywords):
-                        for k in keywords:
-                            matched = next((c for c in cols if k in c), None)
-                            if matched:
-                                return matched
-                        return None
-
-                    corp_k = find_col(['법인', '해외공장', '구분', '사업장명'])
-                    df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k and corp_k in df_sheet.columns else str(cust_name)
-
-                    src_k = find_col(['발생구분', '결함구분', '클레임유형'])
-                    df_sheet['발생구분'] = df_sheet[src_k].astype(str) if src_k and src_k in df_sheet.columns else 'D'
-
-                    num_k = find_col(['통보서', '클레임번호', '위아통보서'])
-                    df_sheet['통보서'] = df_sheet[num_k].astype(str) if num_k and num_k in df_sheet.columns else ''
-
-                    hk_k = find_col(['H/K'])
-                    df_sheet['H/K'] = df_sheet[hk_k].astype(str) if hk_k and hk_k in df_sheet.columns else 'H'
-
-                    maker_k = find_col(['업체', '변제업체', '대리점명'])
-                    df_sheet['업체'] = df_sheet[maker_k].astype(str) if maker_k and maker_k in df_sheet.columns else 'RI14'
-
-                    seq_k = find_col(['SEQ', 'List No', 'No.'])
-                    df_sheet['SEQ'] = df_sheet[seq_k].astype(str) if seq_k and seq_k in df_sheet.columns else '1'
-
-                    ro_yr_k = find_col(['RO년월', '통보년월', '생산일'])
-                    df_sheet['RO년월'] = df_sheet[ro_yr_k].astype(str) if ro_yr_k and ro_yr_k in df_sheet.columns else '2026/09'
-
-                    ro_no_k = find_col(['R/O번호', 'RO(클레임)번호', '클레임번호'])
-                    df_sheet['R/O번호'] = df_sheet[ro_no_k].astype(str) if ro_no_k and ro_no_k in df_sheet.columns else ''
-
-                    vin_k = find_col(['VIN'])
-                    df_sheet['VIN'] = df_sheet[vin_k].astype(str) if vin_k and vin_k in df_sheet.columns else ''
-
-                    ctype_k = find_col(['C/TYPE', 'C/T'])
-                    df_sheet['C/TYPE'] = df_sheet[ctype_k].astype(str) if ctype_k and ctype_k in df_sheet.columns else 'W'
-
-                    car_k = find_col(['차종'])
-                    df_sheet['차종'] = df_sheet[car_k].astype(str) if car_k and car_k in df_sheet.columns else 'J5'
-
-                    part_no_k = find_col(['원인부품', '원인품번', '부품번호'])
-                    df_sheet['원인부품'] = df_sheet[part_no_k].astype(str) if part_no_k and part_no_k in df_sheet.columns else ''
-
-                    part_name_k = find_col(['원인품명', '원인품명', '품명', '원인부품명'])
-                    df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k and part_name_k in df_sheet.columns else ''
-
-                    work_k = find_col(['주작업코드'])
-                    df_sheet['주작업코드'] = df_sheet[work_k].astype(str) if work_k and work_k in df_sheet.columns else ''
-
-                    cause_k = find_col(['원인'])
-                    df_sheet['원인'] = df_sheet[cause_k].astype(str) if cause_k and cause_k in df_sheet.columns else ''
-
-                    phen_k = find_col(['현상'])
-                    df_sheet['현상'] = df_sheet[phen_k].astype(str) if phen_k and phen_k in df_sheet.columns else ''
-
-                    p_date_k = find_col(['생산일자', '생산일'])
-                    df_sheet['생산일자'] = df_sheet[p_date_k].astype(str) if p_date_k and p_date_k in df_sheet.columns else ''
-
-                    r_date_k = find_col(['수리일자', '수리일'])
-                    df_sheet['수리일자'] = df_sheet[r_date_k].astype(str) if r_date_k and r_date_k in df_sheet.columns else ''
-
-                    s_date_k = find_col(['판매일자', '판매일'])
-                    df_sheet['판매일자'] = df_sheet[s_date_k].astype(str) if s_date_k and s_date_k in df_sheet.columns else ''
-
-                    use_m_k = find_col(['사용개월'])
-                    df_sheet['사용개월'] = df_sheet[use_m_k].astype(str) if use_m_k and use_m_k in df_sheet.columns else ''
-
-                    mile_k = find_col(['주행거리'])
-                    df_sheet['주행거리'] = df_sheet[mile_k].astype(str) if mile_k and mile_k in df_sheet.columns else ''
-
-                    pay_k = find_col(['납입율', '납입률'])
-                    df_sheet['납입율'] = df_sheet[pay_k].astype(str) if pay_k and pay_k in df_sheet.columns else '100.00'
-
-                    share_k = find_col(['분담율', '분담률', '적용율', '업체분담률'])
-                    df_sheet['분담율'] = df_sheet[share_k].astype(str) if share_k and share_k in df_sheet.columns else '19.01'
-                    df_sheet['적용율'] = df_sheet[share_k].astype(str) if share_k and share_k in df_sheet.columns else '19.01'
-
-                    part_c_k = find_col(['부품비', '변제 부품비', '부품청구금액', '변제부품비'])
-                    labor_c_k = find_col(['공임비', '변제 공임비', '변제공임비'])
-                    out_c_k = find_col(['외주비', '변제 외주비', '변제외주비'])
-
-                    raw_part = pd.to_numeric(df_sheet[part_c_k], errors='coerce').fillna(0) if part_c_k and part_c_k in df_sheet.columns else 0
-                    raw_labor = pd.to_numeric(df_sheet[labor_c_k], errors='coerce').fillna(0) if labor_c_k and labor_c_k in df_sheet.columns else 0
-                    raw_out = pd.to_numeric(df_sheet[out_c_k], errors='coerce').fillna(0) if out_c_k and out_c_k in df_sheet.columns else 0
-
-                    if share_k and share_k in df_sheet.columns:
-                        rates = pd.to_numeric(df_sheet[share_k], errors='coerce').fillna(19.01)
-                        rate_factor = rates.apply(lambda x: x / 100 if x > 1 else x)
-                        calc_part = raw_part * rate_factor
-                        calc_labor = raw_labor * rate_factor
-                    else:
-                        calc_part = raw_part
-                        calc_labor = raw_labor
-
-                    df_sheet['부품비'] = calc_part
-                    df_sheet['공임비'] = calc_labor
-                    df_sheet['외주비'] = raw_out
-                    df_sheet['합계'] = df_sheet['부품비'] + df_sheet['공임비'] + df_sheet['외주비']
-                    
-                    df_sheet['고객사'] = str(cust_name)
-                    df_sheet['품목'] = df_sheet['원인부품']
-                    
-                    # 첨부 사진 2의 엑셀 1행 표 항목 순서 100% 반영 (28개 항목)
+                    # 표준 28개 항목 정의
                     target_columns = [
                         '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
                         '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
                         '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계'
                     ]
                     
+                    # 컬럼 매핑 유연화 (유사 명칭 대응)
+                    col_map = {
+                        '해외공장': '법인', '구분': '법인', '사업장명': '법인',
+                        '결함구분': '발생구분', '클레임유형': '발생구분',
+                        '클레임번호': '통보서', '위아통보서': '통보서',
+                        '변제업체': '업체', '대리점명': '업체',
+                        'List No': 'SEQ', 'No.': 'SEQ',
+                        '통보년월': 'RO년월', '생산일': 'RO년월',
+                        'RO(클레임)번호': 'R/O번호',
+                        'C/T': 'C/TYPE',
+                        '원인품번': '원인부품', '부품번호': '원인부품',
+                        '원인부품명': '원인품명', '품명': '원인품명',
+                        '생산일': '생산일자',
+                        '수리일': '수리일자',
+                        '판매일': '판매일자',
+                        '납입률': '납입율',
+                        '분담률': '분담율', '적용율': '분담율', '업체분담률': '분담율',
+                        '변제 부품비': '부품비', '부품청구금액': '부품비', '변제부품비': '부품비',
+                        '변제 공임비': '공임비', '변제공임비': '공임비',
+                        '변제 외주비': '외주비', '변제외주비': '외주비'
+                    }
+                    df_sheet = df_sheet.rename(columns=col_map)
+                    
+                    # 누락된 컬럼에 대한 기본값 설정
+                    if '법인' not in df_sheet.columns: df_sheet['법인'] = str(cust_name)
+                    if '발생구분' not in df_sheet.columns: df_sheet['발생구분'] = 'D'
+                    if '통보서' not in df_sheet.columns: df_sheet['통보서'] = ''
+                    if 'H/K' not in df_sheet.columns: df_sheet['H/K'] = 'H'
+                    if '업체' not in df_sheet.columns: df_sheet['업체'] = 'RI14'
+                    if 'SEQ' not in df_sheet.columns: df_sheet['SEQ'] = '1'
+                    if 'RO년월' not in df_sheet.columns: df_sheet['RO년월'] = '2026/09'
+                    if 'R/O번호' not in df_sheet.columns: df_sheet['R/O번호'] = ''
+                    if 'VIN' not in df_sheet.columns: df_sheet['VIN'] = ''
+                    if 'C/TYPE' not in df_sheet.columns: df_sheet['C/TYPE'] = 'W'
+                    if '차종' not in df_sheet.columns: df_sheet['차종'] = 'J5'
+                    if '원인부품' not in df_sheet.columns: df_sheet['원인부품'] = ''
+                    if '원인품명' not in df_sheet.columns: df_sheet['원인품명'] = ''
+                    if '주작업코드' not in df_sheet.columns: df_sheet['주작업코드'] = ''
+                    if '원인' not in df_sheet.columns: df_sheet['원인'] = ''
+                    if '현상' not in df_sheet.columns: df_sheet['현상'] = ''
+                    if '생산일자' not in df_sheet.columns: df_sheet['생산일자'] = ''
+                    if '수리일자' not in df_sheet.columns: df_sheet['수리일자'] = ''
+                    if '판매일자' not in df_sheet.columns: df_sheet['판매일자'] = ''
+                    if '사용개월' not in df_sheet.columns: df_sheet['사용개월'] = ''
+                    if '주행거리' not in df_sheet.columns: df_sheet['주행거리'] = ''
+                    if '납입율' not in df_sheet.columns: df_sheet['납입율'] = '100.00'
+                    if '분담율' not in df_sheet.columns: df_sheet['분담율'] = '19.01'
+                    if '적용율' not in df_sheet.columns: df_sheet['적용율'] = '19.01'
+                    if '부품비' not in df_sheet.columns: df_sheet['부품비'] = 0
+                    if '공임비' not in df_sheet.columns: df_sheet['공임비'] = 0
+                    if '외주비' not in df_sheet.columns: df_sheet['외주비'] = 0
+                    
+                    # 숫자 변환
+                    for col_n in ['부품비', '공임비', '외주비']:
+                        df_sheet[col_n] = pd.to_numeric(df_sheet[col_n], errors='coerce').fillna(0)
+                    
+                    if '합계' in df_sheet.columns:
+                        df_sheet['합계'] = pd.to_numeric(df_sheet['합계'], errors='coerce').fillna(df_sheet['부품비'] + df_sheet['공임비'] + df_sheet['외주비'])
+                    else:
+                        df_sheet['합계'] = df_sheet['부품비'] + df_sheet['공임비'] + df_sheet['외주비']
+                        
                     for tc in target_columns:
                         if tc not in df_sheet.columns:
                             df_sheet[tc] = ''
-
+                            
                     sub_df = df_sheet[target_columns].copy()
                     combined_list.append(sub_df)
-
+                
                 if combined_list:
                     master_cost_df = pd.concat(combined_list, ignore_index=True)
-                    master_cost_df['부품비'] = pd.to_numeric(master_cost_df['부품비'], errors='coerce').fillna(0)
-                    master_cost_df['공임비'] = pd.to_numeric(master_cost_df['공임비'], errors='coerce').fillna(0)
-                    master_cost_df['외주비'] = pd.to_numeric(master_cost_df['외주비'], errors='coerce').fillna(0)
-                    master_cost_df['합계'] = pd.to_numeric(master_cost_df['합계'], errors='coerce').fillna(0)
-                    
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 2의 엑셀 표 항목 순서대로 완벽하게 취합되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트의 데이터가 성공적으로 취합되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1084,7 +1037,7 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        # 사진 2의 엑셀 1행 표 항목 순서와 100% 일치
+        # 첨부 사진 2의 엑셀 1행 표 항목 순서와 100% 일치
         display_cols = [
             '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
             '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
