@@ -912,10 +912,10 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (파일 업로드 세션 영구 보장 및 모든 시트 정밀 취합) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (사진 표 항목 순서 고정 및 모비스/WIA산동 금액 재계산 반영) ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
-    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 누락 없이 통합 취합하여 표준 표 형식으로 출력합니다.")
+    st.markdown("업로드하신 원본 엑셀 파일의 **모든 시트(현대, 글로비스, 현대위아, 모비스 등)**를 표준 표 형식으로 통일하여 취합합니다.")
 
     col_c_up1, col_c_up2 = st.columns([2, 1])
     with col_c_up1:
@@ -949,7 +949,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # 엑셀 파일 업로드 시 세션 영구 저장 및 모든 시트 정밀 파싱 처리
+    # 엑셀 파일 업로드 시 사진 표 항목 순서 고정 및 모비스/WIA산동 금액 재계산 처리
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
@@ -991,6 +991,7 @@ elif menu == "고객사 클레임 비용 분석":
                                 return matched
                         return None
 
+                    # 사진 표와 정확히 동일한 28개 항목 표준 매핑
                     corp_k = find_col(['법인', '해외공장', '구분', '사업장명'])
                     df_sheet['법인'] = df_sheet[corp_k].astype(str) if corp_k else str(cust_name)
 
@@ -1030,6 +1031,38 @@ elif menu == "고객사 클레임 비용 분석":
                     part_name_k = find_col(['원인품명', '품명', '원인부품명'])
                     df_sheet['원인품명'] = df_sheet[part_name_k].astype(str) if part_name_k else ''
 
+                    work_k = find_col(['주작업코드'])
+                    df_sheet['주작업코드'] = df_sheet[work_k].astype(str) if work_k else ''
+
+                    cause_k = find_col(['원인'])
+                    df_sheet['원인'] = df_sheet[cause_k].astype(str) if cause_k else ''
+
+                    phen_k = find_col(['현상'])
+                    df_sheet['현상'] = df_sheet[phen_k].astype(str) if phen_k else ''
+
+                    p_date_k = find_col(['생산일자', '생산일'])
+                    df_sheet['생산일자'] = df_sheet[p_date_k].astype(str) if p_date_k else ''
+
+                    r_date_k = find_col(['수리일자', '수리일'])
+                    df_sheet['수리일자'] = df_sheet[r_date_k].astype(str) if r_date_k else ''
+
+                    s_date_k = find_col(['판매일자', '판매일'])
+                    df_sheet['판매일자'] = df_sheet[s_date_k].astype(str) if s_date_k else ''
+
+                    use_m_k = find_col(['사용개월'])
+                    df_sheet['사용개월'] = df_sheet[use_m_k].astype(str) if use_m_k else ''
+
+                    mile_k = find_col(['주행거리'])
+                    df_sheet['주행거리'] = df_sheet[mile_k].astype(str) if mile_k else ''
+
+                    pay_k = find_col(['납입율', '납입률'])
+                    df_sheet['납입율'] = df_sheet[pay_k].astype(str) if pay_k else '100.00'
+
+                    share_k = find_col(['분담율', '분담률', '적용율', '업체분담률'])
+                    df_sheet['분담율'] = df_sheet[share_k].astype(str) if share_k else '19.01'
+                    df_sheet['적용율'] = df_sheet[share_k].astype(str) if share_k else '19.01'
+
+                    # 모비스 및 WIA산동 특화 금액 재계산 반영
                     part_c_k = find_col(['부품비', '변제 부품비', '부품청구금액'])
                     labor_c_k = find_col(['공임비', '변제 공임비'])
                     out_c_k = find_col(['외주비', '변제 외주비'])
@@ -1038,9 +1071,8 @@ elif menu == "고객사 클레임 비용 분석":
                     raw_labor = pd.to_numeric(df_sheet[labor_c_k], errors='coerce').fillna(0) if labor_c_k else 0
                     raw_out = pd.to_numeric(df_sheet[out_c_k], errors='coerce').fillna(0) if out_c_k else 0
 
-                    rate_k = find_col(['분담율', '적용율', '업체분담률'])
-                    if rate_k:
-                        rates = pd.to_numeric(df_sheet[rate_k], errors='coerce').fillna(100)
+                    if share_k:
+                        rates = pd.to_numeric(df_sheet[share_k], errors='coerce').fillna(19.01)
                         rate_factor = rates.apply(lambda x: x / 100 if x > 1 else x)
                         calc_part = raw_part * rate_factor
                         calc_labor = raw_labor * rate_factor
@@ -1056,7 +1088,18 @@ elif menu == "고객사 클레임 비용 분석":
                     df_sheet['고객사'] = str(cust_name)
                     df_sheet['품목'] = df_sheet['원인부품']
                     
-                    sub_df = df_sheet[['법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', '원인부품', '원인품명', '부품비', '공임비', '외주비', '합계', '고객사', '품목']].copy()
+                    # 사진 표의 맨 윗줄 항목 순서와 100% 동일하게 구성
+                    target_columns = [
+                        '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
+                        '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
+                        '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계', '고객사', '품목'
+                    ]
+                    
+                    for tc in target_columns:
+                        if tc not in df_sheet.columns:
+                            df_sheet[tc] = ''
+
+                    sub_df = df_sheet[target_columns].copy()
                     combined_list.append(sub_df)
 
                 if combined_list:
@@ -1068,7 +1111,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 성공적으로 취합되었습니다!")
+                    st.success(f"총 {len(all_sheets)}개 시트({', '.join(all_sheets)})의 데이터가 사진 표 항목 순서 및 모비스/WIA산동 재계산 반영 완료되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
@@ -1100,13 +1143,18 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 📋 1. 필드 클레임 취합")
         
-        display_cols = ['법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', '원인부품', '원인품명', '부품비', '공임비', '외주비', '합계']
+        # 사진 표의 맨 윗줄 항목 구성을 정확히 동일한 순서로 나열
+        display_cols = [
+            '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
+            '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
+            '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계'
+        ]
         available_display_cols = [c for c in display_cols if c in filtered_cost.columns]
 
         formatted_summary = filtered_cost[available_display_cols].copy()
         for col in ['부품비', '공임비', '외주비', '합계']:
             if col in formatted_summary.columns:
-                formatted_summary[col] = formatted_summary[col].apply(lambda x: f"₩ {x:,.0f}")
+                formatted_summary[col] = formatted_summary[col].apply(lambda x: f"₩ {x:,.0f}" if isinstance(x, (int, float)) else x)
 
         st.dataframe(formatted_summary, use_container_width=True, height=400)
 
