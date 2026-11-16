@@ -41,6 +41,52 @@ st.markdown("""
 # 메인 타이틀
 st.title("Quality Assurance/Management")
 
+# 로컬 파일 자동 저장 및 불러오기 경로
+TASKS_FILE = "tasks_data.csv"
+
+def save_tasks_to_local(tasks):
+    try:
+        df_save = pd.DataFrame(tasks)
+        for col in ['date', 'deadline']:
+            if col in df_save.columns:
+                df_save[col] = pd.to_datetime(df_save[col]).dt.strftime('%Y-%m-%d')
+        df_save.to_csv(TASKS_FILE, index=False, encoding='utf-8-sig')
+    except Exception as e:
+        print(f"로컬 저장 중 오류 발생: {e}")
+
+def load_tasks_from_local():
+    if os.path.exists(TASKS_FILE):
+        try:
+            df = pd.read_csv(TASKS_FILE)
+            if not df.empty:
+                tasks = []
+                for _, row in df.iterrows():
+                    try:
+                        t_date = datetime.strptime(str(row.get('date', date.today())).split()[0], '%Y-%m-%d').date()
+                    except:
+                        t_date = date.today()
+                    try:
+                        t_deadline = datetime.strptime(str(row.get('deadline', date.today())).split()[0], '%Y-%m-%d').date()
+                    except:
+                        t_deadline = date.today()
+                        
+                    tasks.append({
+                        "id": int(row.get('id', len(tasks) + 1)),
+                        "title": str(row.get('title', '')),
+                        "date": t_date,
+                        "deadline": t_deadline,
+                        "memo": str(row.get('memo', '')) if pd.notna(row.get('memo')) else "",
+                        "requester": str(row.get('requester', '')) if pd.notna(row.get('requester')) else "",
+                        "category": str(row.get('category', '고객제출')),
+                        "completed": str(row.get('completed', 'False')).lower() == 'true',
+                        "completed_date": str(row.get('completed_date')) if pd.notna(row.get('completed_date')) and str(row.get('completed_date')) != 'nan' else None,
+                        "updated_date": str(row.get('updated_date')) if pd.notna(row.get('updated_date')) and str(row.get('updated_date')) != 'nan' else None
+                    })
+                return tasks
+        except Exception:
+            pass
+    return None
+
 # 구글 시트에서 tasks 데이터를 불러오는 함수
 def load_tasks_from_gsheet():
     try:
@@ -65,7 +111,9 @@ def load_tasks_from_gsheet():
             except:
                 t_date = date.today()
             try:
-                t_deadline = datetime.strptime(str(row.get('deadline', date.today())).split()[0], '%Y-%m-%d').date()
+                # deadline 또는 deadlin 오탈자 모두 대응
+                dl_val = row.get('deadline', row.get('deadlin', date.today()))
+                t_deadline = datetime.strptime(str(dl_val).split()[0], '%Y-%m-%d').date()
             except:
                 t_deadline = date.today()
                 
@@ -89,36 +137,44 @@ def load_tasks_from_gsheet():
 if 'task_gsheet_url' not in st.session_state: st.session_state['task_gsheet_url'] = ""
 
 if 'tasks' not in st.session_state:
-    loaded_tasks = load_tasks_from_gsheet()
-    if loaded_tasks:
-        st.session_state['tasks'] = loaded_tasks
+    # 1순위: 로컬에 자동 저장된 파일이 있으면 최우선 로드 (새로고침 시 변경사항 유지)
+    loaded_local = load_tasks_from_local()
+    if loaded_local:
+        st.session_state['tasks'] = loaded_local
     else:
-        st.session_state['tasks'] = [
-            {
-                "id": 1,
-                "title": "[현대위아] 10월 클레임 비용 정산",
-                "date": date.today(),
-                "deadline": date.today(),
-                "memo": "2차 검토 및 보고서 반영 필요",
-                "requester": "현대위아 품질팀",
-                "category": "고객제출",
-                "completed": False,
-                "completed_date": None,
-                "updated_date": None
-            },
-            {
-                "id": 2,
-                "title": "워터 펌프 어셈블리 소음 이슈 분석",
-                "date": date.today(),
-                "deadline": date.today(),
-                "memo": "원인 분석 결과 회신",
-                "requester": "고객지원팀",
-                "category": "자료작성",
-                "completed": True,
-                "completed_date": str(date.today()),
-                "updated_date": None
-            }
-        ]
+        # 2순위: 구글 시트 연동 데이터 로드 시도
+        loaded_tasks = load_tasks_from_gsheet()
+        if loaded_tasks:
+            st.session_state['tasks'] = loaded_tasks
+        else:
+            # 3순위: 기본 예시 데이터
+            st.session_state['tasks'] = [
+                {
+                    "id": 1,
+                    "title": "[현대위아] 10월 클레임 비용 정산",
+                    "date": date.today(),
+                    "deadline": date.today(),
+                    "memo": "2차 검토 및 보고서 반영 필요",
+                    "requester": "현대위아 품질팀",
+                    "category": "고객제출",
+                    "completed": False,
+                    "completed_date": None,
+                    "updated_date": None
+                },
+                {
+                    "id": 2,
+                    "title": "워터 펌프 어셈블리 소음 이슈 분석",
+                    "date": date.today(),
+                    "deadline": date.today(),
+                    "memo": "원인 분석 결과 회신",
+                    "requester": "고객지원팀",
+                    "category": "자료작성",
+                    "completed": True,
+                    "completed_date": str(date.today()),
+                    "updated_date": None
+                }
+            ]
+        save_tasks_to_local(st.session_state['tasks'])
 
 if 'cal_year' not in st.session_state: st.session_state['cal_year'] = datetime.today().year
 if 'cal_month' not in st.session_state: st.session_state['cal_month'] = datetime.today().month
@@ -195,17 +251,17 @@ if menu == "종합 현황":
 elif menu == "업무 등록/관리":
     st.subheader("월별 업무 관리 현황")
     
-    # 구글 시트 연동 및 내보내기 버튼 추가
     sync_col1, sync_col2 = st.columns(2)
     with sync_col1:
         if st.button("🔄 구글 시트에서 업무 새로고침/불러오기", use_container_width=True):
             loaded = load_tasks_from_gsheet()
             if loaded:
                 st.session_state['tasks'] = loaded
-                st.success("구글 시트에서 업무 데이터를 불러왔습니다!")
+                save_tasks_to_local(st.session_state['tasks'])
+                st.success("구글 시트에서 업무 데이터를 불러와 자동 저장되었습니다!")
                 st.rerun()
             else:
-                st.warning("설정된 구글 시트 URL이 없거나 데이터를 불러올 수 없습니다. '구글 시트 연동 설정'을 확인해주세요.")
+                st.warning("구글 시트 URL이 올바르지 않거나 데이터가 없습니다. (컬럼명이 영어로 정확한지 확인해주세요)")
     with sync_col2:
         if st.session_state['tasks']:
             task_export_df = pd.DataFrame(st.session_state['tasks'])
@@ -320,6 +376,7 @@ elif menu == "업무 등록/관리":
                     if st.button(comp_label, key=f"comp_btn_{task['id']}", use_container_width=True):
                         task['completed'] = not task['completed']
                         task['completed_date'] = str(date.today()) if task['completed'] else None
+                        save_tasks_to_local(st.session_state['tasks'])
                         st.rerun()
 
                     if st.button("수정", key=f"edit_btn_{task['id']}", use_container_width=True):
@@ -337,10 +394,11 @@ elif menu == "업무 등록/관리":
                     d_col1, d_col2 = st.columns(2)
                     if d_col1.button("삭제", key=f"confirm_del_{task['id']}", use_container_width=True):
                         st.session_state['tasks'] = [t for t in st.session_state['tasks'] if t['id'] != task['id']]
+                        save_tasks_to_local(st.session_state['tasks'])
                         if st.session_state['editing_task_id'] == task['id']:
                             st.session_state['editing_task_id'] = None
                         st.session_state['delete_confirm_id'] = None
-                        st.success("삭제되었습니다.")
+                        st.success("삭제되고 자동 저장되었습니다.")
                         st.rerun()
                     if d_col2.button("취소", key=f"cancel_del_{task['id']}", use_container_width=True):
                         st.session_state['delete_confirm_id'] = None
@@ -363,8 +421,9 @@ elif menu == "업무 등록/관리":
             if c_col1.button("등록", use_container_width=True):
                 data = st.session_state['pending_form_data']
                 if st.session_state['save_confirm_type'] == 'new':
+                    new_id = max([t['id'] for t in st.session_state['tasks']], default=0) + 1
                     st.session_state['tasks'].append({
-                        "id": len(st.session_state['tasks']) + 1,
+                        "id": new_id,
                         "title": data['title'],
                         "date": data['date'],
                         "deadline": data['deadline'],
@@ -375,7 +434,7 @@ elif menu == "업무 등록/관리":
                         "completed_date": None,
                         "updated_date": None
                     })
-                    st.success("신규 등록되었습니다!")
+                    st.success("신규 등록 및 자동 저장되었습니다!")
                 else:
                     target_t = next((t for t in st.session_state['tasks'] if t['id'] == st.session_state['editing_task_id']), None)
                     if target_t:
@@ -389,7 +448,9 @@ elif menu == "업무 등록/관리":
                             "updated_date": datetime.today().strftime('%y-%m-%d')
                         })
                         st.session_state['editing_task_id'] = None
-                        st.success("수정되었습니다!")
+                        st.success("수정 및 자동 저장되었습니다!")
+                
+                save_tasks_to_local(st.session_state['tasks'])
                 st.session_state['save_confirm_type'] = None
                 st.session_state['pending_form_data'] = None
                 st.rerun()
@@ -489,7 +550,6 @@ elif menu == "필드 클레임 현황":
     if load_gsheet_btn:
         try:
             sheet_url = st.session_state['gsheet_url']
-            
             if "pubhtml" in sheet_url:
                 export_url = sheet_url.replace("/pubhtml", "/pub?output=csv")
             elif "edit" in sheet_url:
@@ -1201,5 +1261,6 @@ elif menu == "구글 시트 연동 설정":
         reloaded = load_tasks_from_gsheet()
         if reloaded:
             st.session_state['tasks'] = reloaded
+            save_tasks_to_local(st.session_state['tasks'])
             
         st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장되었습니다!")
