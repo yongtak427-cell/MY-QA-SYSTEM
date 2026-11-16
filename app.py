@@ -45,6 +45,10 @@ st.title("Quality Assurance/Management")
 # 로컬 파일 자동 저장 및 불러오기 경로 (업무 데이터 & 설정 링크)
 TASKS_FILE = "tasks_data.csv"
 SETTINGS_FILE = "settings_data.json"
+COST_DATA_DIR = "saved_cost_files"
+
+if not os.path.exists(COST_DATA_DIR):
+    os.makedirs(COST_DATA_DIR)
 
 def save_tasks_to_local(tasks):
     try:
@@ -268,7 +272,7 @@ if menu == "종합 현황":
 
 # --- 1. 업무 등록/관리 메뉴 ---
 elif menu == "업무 등록/관리":
-    st.subheader("월별 업무 관리 현황")
+    st.subheader("월별 업무 관리 및 지속 기록 캘린더")
     
     sync_col1, sync_col2 = st.columns(2)
     with sync_col1:
@@ -280,7 +284,7 @@ elif menu == "업무 등록/관리":
                 st.success("구글 시트에서 업무 데이터를 불러와 자동 저장되었습니다!")
                 st.rerun()
             else:
-                st.warning("구글 시트 URL이 올바르지 않거나 데이터가 없습니다. (컬럼명이 영어로 정확한지 확인해주세요)")
+                st.warning("구글 시트 URL이 올바르지 않거나 데이터가 없습니다.")
     with sync_col2:
         if st.session_state['tasks']:
             task_export_df = pd.DataFrame(st.session_state['tasks'])
@@ -299,9 +303,8 @@ elif menu == "업무 등록/관리":
                 use_container_width=True
             )
 
-    # 구글 시트 즉시 반영용 TSV 간편 복사 영역 추가
     with st.expander("📋 [추천] 구글 시트 1초 즉시 동기화 (파일 업로드 없이 복사·붙여넣기)"):
-        st.markdown("아래 박스의 **[텍스트 전체 복사]** 버튼을 누른 뒤, 구글 시트 **A1 셀**에 붙여넣기(`Ctrl + V`) 하시면 업로드 과정 없이 즉시 반영됩니다.")
+        st.markdown("아래 박스의 데이터를 복사하여 구글 시트 **A1 셀**에 붙여넣기(`Ctrl + V`) 하시면 즉시 반영됩니다.")
         if st.session_state['tasks']:
             tsv_df = pd.DataFrame(st.session_state['tasks'])
             for col in ['date', 'deadline']:
@@ -1018,17 +1021,16 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 (4개 파일 개별 업로드 및 자동 저장 적용) ---
 elif menu == "고객사 클레임 비용 분석":
-    st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
-    st.markdown("업로드하신 **'첨부1' 원본 엑셀 파일(모든 시트)**을 표준 28개 항목으로 완벽하게 취합 및 가공합니다. (모비스, WIA산동 분담률/환율 계산 공식 자동 적용)")
+    st.subheader("고객사별 클레임 비용 4개 파일 개별 업로드 및 자동 저장 대시보드")
+    st.markdown("한 번에 대용량 파일을 업로드할 때 발생하는 시스템 충돌/오류를 방지하기 위해 **4개의 파일(완성차, 글로비스, 위아, 모비스 등)을 개별적으로 업로드**할 수 있도록 구성했습니다. 업로드 즉시 로컬에 자동 저장됩니다.")
 
     col_c_up1, col_c_up2 = st.columns([2, 1])
     with col_c_up1:
-        cost_uploaded_file = st.file_uploader("첨부1 클레임 비용 원본 엑셀(.xlsx) 파일 업로드", type=["xlsx"], key="cost_file_up")
+        load_cost_gsheet_btn = st.button("구글 시트에서 비용 데이터 불러오기", use_container_width=True)
     with col_c_up2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        load_cost_gsheet_btn = st.button("비용 구글 시트 데이터 불러오기", use_container_width=True)
+        pass
 
     if load_cost_gsheet_btn:
         try:
@@ -1053,11 +1055,22 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
-    # [수정 완료] 들여쓰기 오류 수정으로 파일 업로드 시 즉시 28개 항목 표준 테이블로 파싱되도록 개선
-    if cost_uploaded_file is not None:
-        if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
+    st.markdown("---")
+    st.markdown("##### 📂 4개 파일 개별 안전 업로드 영역")
+
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
+        file_hkmc = st.file_uploader("1. 완성차(HKMC) 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="safe_hkmc")
+        file_globis = st.file_uploader("2. 글로비스 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="safe_globis")
+    with col_up2:
+        file_wia = st.file_uploader("3. 위아(WIA) 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="safe_wia")
+        file_mobis = st.file_uploader("4. 모비스 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="safe_mobis")
+
+    # 파싱 및 자동 저장 처리 함수
+    def process_and_save_cost_file(uploaded_file, file_key):
+        if uploaded_file is not None:
             try:
-                xls = pd.ExcelFile(cost_uploaded_file)
+                xls = pd.ExcelFile(uploaded_file)
                 all_sheets = xls.sheet_names
                 combined_list = []
                 
@@ -1068,21 +1081,18 @@ elif menu == "고객사 클레임 비용 분석":
                 ]
 
                 for sheet_name in all_sheets:
-                    df_raw_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=None)
+                    df_raw_sheet = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=None)
                     if df_raw_sheet.empty or len(df_raw_sheet) < 1:
                         continue
                     
-                    if sheet_name in ['현대', '기아', 'HMB', 'HMI', 'HMMC', 'HMTR']:
-                        header_row_idx = 5
-                    else:
-                        header_row_idx = 0
-                        for idx, row in df_raw_sheet.iloc[:10].iterrows():
-                            row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                            if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "RO(클레임)번호", "법인"]):
-                                header_row_idx = idx
-                                break
+                    header_row_idx = 0
+                    for idx, row in df_raw_sheet.iloc[:10].iterrows():
+                        row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                        if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "RO(클레임)번호", "법인"]):
+                            header_row_idx = idx
+                            break
                     
-                    df_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=header_row_idx)
+                    df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=header_row_idx)
                     df_sheet = df_sheet.dropna(how='all')
                     if df_sheet.empty:
                         continue
@@ -1092,7 +1102,6 @@ elif menu == "고객사 클레임 비용 분석":
                     processed_rows = []
                     for _, row in df_sheet.iterrows():
                         row_dict = {}
-                        
                         row_dict['법인'] = str(row.get('법인', sheet_name))
                         row_dict['발생구분'] = str(row.get('발생구분', row.get('결함구분', row.get('클레임유형', 'D'))))
                         row_dict['통보서'] = str(row.get('통보서', row.get('클레임번호', row.get('위아통보서', ''))))
@@ -1105,7 +1114,7 @@ elif menu == "고객사 클레임 비용 분석":
                         row_dict['C/TYPE'] = str(row.get('C/TYPE', row.get('클레임타입', 'W')))
                         row_dict['차종'] = str(row.get('차종', row.get('차종(표준)', 'J5')))
                         row_dict['원인부품'] = str(row.get('원인부품', row.get('원인품번', row.get('원인부품번호', row.get('품번', '')))))
-                        row_dict['원인품명'] = str(row.get('원인품명', row.get('원인부품명', row.get('품명', ''))))
+                        row_dict['원인품명'] = str(row.get('원인품명', row.get('원인부품명', row.get('품명', '')))))
                         row_dict['주작업코드'] = str(row.get('주작업코드', row.get('OP Code', '')))
                         row_dict['원인'] = str(row.get('원인', row.get('원인코드', '')))
                         row_dict['현상'] = str(row.get('현상', row.get('현상코드', '')))
@@ -1131,16 +1140,11 @@ elif menu == "고객사 클레임 비용 분석":
                         raw_labor = float(pd.to_numeric(row.get('공임비', row.get('변제 공임비', row.get('공임비', 0))), errors='coerce') or 0)
                         raw_out = float(pd.to_numeric(row.get('외주비', row.get('변제 외주비', row.get('외주비', 0))), errors='coerce') or 0)
                         
-                        if "산동" in sheet_name or "모비스" in sheet_name:
-                            target_amt = float(pd.to_numeric(row.get('변제대상금액', raw_part + raw_labor), errors='coerce') or (raw_part + raw_labor))
-                            calc_part = raw_part * share_ratio_decimal if raw_part > 0 else target_amt * share_ratio_decimal * 0.5
-                            calc_labor = raw_labor * share_ratio_decimal if raw_labor > 0 else target_amt * share_ratio_decimal * 0.5
-                        else:
-                            calc_part = raw_part if raw_part > 1000 and "현대" in sheet_name else raw_part * share_ratio_decimal
-                            calc_labor = raw_labor if raw_labor > 1000 and "현대" in sheet_name else raw_labor * share_ratio_decimal
-                            
-                        row_dict['부품비'] = raw_part if "현대" in sheet_name or "기아" in sheet_name else calc_part
-                        row_dict['공임비'] = raw_labor if "현대" in sheet_name or "기아" in sheet_name else calc_labor
+                        calc_part = raw_part * share_ratio_decimal
+                        calc_labor = raw_labor * share_ratio_decimal
+                        
+                        row_dict['부품비'] = calc_part
+                        row_dict['공임비'] = calc_labor
                         row_dict['외주비'] = raw_out
                         row_dict['합계'] = row_dict['부품비'] + row_dict['공임비'] + row_dict['외주비']
                         
@@ -1154,19 +1158,36 @@ elif menu == "고객사 클레임 비용 분석":
                         combined_list.append(df_sub[target_columns])
                 
                 if combined_list:
-                    master_cost_df = pd.concat(combined_list, ignore_index=True)
-                    master_cost_df['부품비'] = pd.to_numeric(master_cost_df['부품비'], errors='coerce').fillna(0)
-                    master_cost_df['공임비'] = pd.to_numeric(master_cost_df['공임비'], errors='coerce').fillna(0)
-                    master_cost_df['외주비'] = pd.to_numeric(master_cost_df['외주비'], errors='coerce').fillna(0)
-                    master_cost_df['합계'] = pd.to_numeric(master_cost_df['합계'], errors='coerce').fillna(0)
-                    
-                    st.session_state['cost_df'] = master_cost_df
-                    st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"첨부1의 모든 시트({', '.join(all_sheets)}) 데이터가 '예시안2/3' 기준 표준 28개 항목으로 완벽하게 취합되었습니다!")
+                    df_res = pd.concat(combined_list, ignore_index=True)
+                    df_res.to_csv(os.path.join(COST_DATA_DIR, f"{file_key}.csv"), index=False, encoding='utf-8-sig')
+                    return df_res
             except Exception as e:
-                st.error(f"비용 파일 처리 중 오류 발생: {e}")
+                st.error(f"[{file_key}] 파일 처리 중 오류 발생: {e}")
+        return None
 
-    cost_df = st.session_state['cost_df']
+    # 각 파일 업로드 시 즉시 처리 및 로컬 자동 저장
+    res_hkmc = process_and_save_cost_file(file_hkmc, 'hkmc')
+    res_globis = process_and_save_cost_file(file_globis, 'globis')
+    res_wia = process_and_save_cost_file(file_wia, 'wia')
+    res_mobis = process_and_save_cost_file(file_mobis, 'mobis')
+
+    # 로컬 저장소에 저장된 파일 자동 로드 및 통합 취합
+    all_cost_dfs = []
+    for f_name in ['hkmc.csv', 'globis.csv', 'wia.csv', 'mobis.csv']:
+        f_path = os.path.join(COST_DATA_DIR, f_name)
+        if os.path.exists(f_path):
+            try:
+                df_loaded = pd.read_csv(f_path)
+                if not df_loaded.empty:
+                    all_cost_dfs.append(df_loaded)
+            except:
+                pass
+
+    if all_cost_dfs:
+        cost_df = pd.concat(all_cost_dfs, ignore_index=True)
+        st.session_state['cost_df'] = cost_df
+    else:
+        cost_df = st.session_state['cost_df']
 
     if not cost_df.empty:
         st.markdown("---")
@@ -1194,17 +1215,6 @@ elif menu == "고객사 클레임 비용 분석":
             all_vins = sorted(cost_df['VIN'].dropna().unique().tolist()) if 'VIN' in cost_df.columns else []
             selected_vin_filter = st.multiselect("VIN", all_vins, default=[])
 
-        f_col7, f_col8, f_col9 = st.columns(3)
-        with f_col7:
-            all_cars = sorted(cost_df['차종'].dropna().unique().tolist()) if '차종' in cost_df.columns else []
-            selected_car_filter = st.multiselect("차종", all_cars, default=[])
-        with f_col8:
-            all_part_nos = sorted(cost_df['원인부품'].dropna().unique().tolist()) if '원인부품' in cost_df.columns else []
-            selected_partno_filter = st.multiselect("원인부품", all_part_nos, default=[])
-        with f_col9:
-            all_part_names = sorted(cost_df['원인품명'].dropna().unique().tolist()) if '원인품명' in cost_df.columns else []
-            selected_partname_filter = st.multiselect("원인품명", all_part_names, default=[])
-
         filtered_cost = cost_df.copy()
         if '법인' in filtered_cost.columns and selected_corp_filter:
             filtered_cost = filtered_cost[filtered_cost['법인'].isin(selected_corp_filter)]
@@ -1218,15 +1228,9 @@ elif menu == "고객사 클레임 비용 분석":
             filtered_cost = filtered_cost[filtered_cost['R/O번호'].isin(selected_ro_filter)]
         if 'VIN' in filtered_cost.columns and selected_vin_filter:
             filtered_cost = filtered_cost[filtered_cost['VIN'].isin(selected_vin_filter)]
-        if '차종' in filtered_cost.columns and selected_car_filter:
-            filtered_cost = filtered_cost[filtered_cost['차종'].isin(selected_car_filter)]
-        if '원인부품' in filtered_cost.columns and selected_partno_filter:
-            filtered_cost = filtered_cost[filtered_cost['원인부품'].isin(selected_partno_filter)]
-        if '원인품명' in filtered_cost.columns and selected_partname_filter:
-            filtered_cost = filtered_cost[filtered_cost['원인품명'].isin(selected_partname_filter)]
 
         st.markdown("---")
-        st.markdown("### 📋 1. 필드 클레임 취합")
+        st.markdown("### 📋 1. 필드 클레임 취합 결과")
         
         display_cols = [
             '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
@@ -1261,42 +1265,8 @@ elif menu == "고객사 클레임 비용 분석":
         total_count = len(filtered_cost)
         
         st.markdown(f"**부품비 합계:** ₩ {total_part:,.0f} | **공임비 합계:** ₩ {total_labor:,.0f} | **외주비 합계:** ₩ {total_out:,.0f} | **총 합계 금액:** ₩ {total_amount:,.0f} | **총 건수:** {total_count:,}건")
-
-        st.markdown("---")
-        st.markdown("### 📊 2. 고객사 및 품목 별 현황")
-
-        col_t1, col_t2 = st.columns(2)
-
-        with col_t1:
-            st.markdown("#### 법인(고객사)별 현황")
-            if '법인' in filtered_cost.columns and '합계' in filtered_cost.columns:
-                cust_summary = filtered_cost.groupby('법인').agg(
-                    부품비=('부품비', 'sum'),
-                    공임비=('공임비', 'sum'),
-                    외주비=('외주비', 'sum'),
-                    합계금액=('합계', 'sum'),
-                    건수=('합계', 'count')
-                ).reset_index()
-                for c in ['부품비', '공임비', '외주비', '합계금액']:
-                    cust_summary[c] = cust_summary[c].apply(lambda x: f"₩ {x:,.0f}")
-                st.dataframe(cust_summary, use_container_width=True, height=320)
-
-        with col_t2:
-            st.markdown("#### 원인부품별 현황")
-            if '원인부품' in filtered_cost.columns and '합계' in filtered_cost.columns:
-                part_summary = filtered_cost.groupby(['원인부품', '원인품명']).agg(
-                    부품비=('부품비', 'sum'),
-                    공임비=('공임비', 'sum'),
-                    외주비=('외주비', 'sum'),
-                    합계금액=('합계', 'sum'),
-                    건수=('합계', 'count')
-                ).reset_index()
-                for c in ['부품비', '공임비', '외주비', '합계금액']:
-                    part_summary[c] = part_summary[c].apply(lambda x: f"₩ {x:,.0f}")
-                st.dataframe(part_summary, use_container_width=True, height=320)
-
     else:
-        st.info("고객사 클레임 비용 원본 엑셀 파일('첨부1')을 업로드해주세요.")
+        st.info("4개 고객사별 엑셀 파일을 업로드해주세요. 업로드 즉시 자동 저장되며 대시보드에 반영됩니다.")
 
 # --- 5. 구글 시트 연동 설정 메뉴 ---
 elif menu == "구글 시트 연동 설정":
