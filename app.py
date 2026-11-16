@@ -1114,7 +1114,7 @@ elif menu == "고객사 클레임 비용 분석":
                         row_dict['C/TYPE'] = str(row.get('C/TYPE', row.get('클레임타입', 'W')))
                         row_dict['차종'] = str(row.get('차종', row.get('차종(표준)', 'J5')))
                         row_dict['원인부품'] = str(row.get('원인부품', row.get('원인품번', row.get('원인부품번호', row.get('품번', '')))))
-                        row_dict['원인품명'] = str(row.get('원인품명', row.get('원인부품명', row.get('품명', '')))))
+                        row_dict['원인품명'] = str(row.get('원인품명', row.get('원인부품명', row.get('품명', ''))))
                         row_dict['주작업코드'] = str(row.get('주작업코드', row.get('OP Code', '')))
                         row_dict['원인'] = str(row.get('원인', row.get('원인코드', '')))
                         row_dict['현상'] = str(row.get('현상', row.get('현상코드', '')))
