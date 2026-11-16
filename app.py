@@ -1068,15 +1068,18 @@ elif menu == "고객사 클레임 비용 분석":
 
                 for sheet_name in all_sheets:
                     df_raw_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=None)
-                    if df_raw_sheet.empty or len(df_raw_sheet) < 3:
+                    if df_raw_sheet.empty or len(df_raw_sheet) < 1:
                         continue
                     
-                    header_row_idx = 0
-                    for idx, row in df_raw_sheet.iloc[:10].iterrows():
-                        row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                        if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "RO(클레임)번호"]):
-                            header_row_idx = idx
-                            break
+                    if sheet_name in ['현대', '기아', 'HMB', 'HMI', 'HMMC', 'HMTR']:
+                        header_row_idx = 5
+                    else:
+                        header_row_idx = 0
+                        for idx, row in df_raw_sheet.iloc[:10].iterrows():
+                            row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                            if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "RO(클레임)번호", "법인"]):
+                                header_row_idx = idx
+                                break
                     
                     df_sheet = pd.read_excel(cost_uploaded_file, sheet_name=sheet_name, header=header_row_idx)
                     df_sheet = df_sheet.dropna(how='all')
@@ -1089,7 +1092,7 @@ elif menu == "고객사 클레임 비용 분석":
                     for _, row in df_sheet.iterrows():
                         row_dict = {}
                         
-                        row_dict['법인'] = str(sheet_name)
+                        row_dict['법인'] = str(row.get('법인', sheet_name))
                         row_dict['발생구분'] = str(row.get('발생구분', row.get('결함구분', row.get('클레임유형', 'D'))))
                         row_dict['통보서'] = str(row.get('통보서', row.get('클레임번호', row.get('위아통보서', ''))))
                         row_dict['H/K'] = str(row.get('H/K', row.get('H/K구분', 'H')))
@@ -1105,21 +1108,23 @@ elif menu == "고객사 클레임 비용 분석":
                         row_dict['주작업코드'] = str(row.get('주작업코드', row.get('OP Code', '')))
                         row_dict['원인'] = str(row.get('원인', row.get('원인코드', '')))
                         row_dict['현상'] = str(row.get('현상', row.get('현상코드', '')))
-                        row_dict['생산일자'] = str(row.get('생산일자', row.get('생산일', '')))
-                        row_dict['수리일자'] = str(row.get('수리일자', row.get('수리일', '')))
-                        row_dict['판매일자'] = str(row.get('판매일자', row.get('판매일', '')))
-                        row_dict['사용개월'] = str(row.get('사용개월', row.get('사용기간', '')))
-                        row_dict['주행거리'] = str(row.get('주행거리', row.get('주행거리(Km)', '')))
-                        row_dict['납입율'] = str(row.get('납입율', row.get('납입률', '100.00')))
+                        row_dict['생산일자'] = str(row.get('생산일자', row.get('생산일', ''))).split()[0]
+                        row_dict['수리일자'] = str(row.get('수리일자', row.get('수리일', ''))).split()[0]
+                        row_dict['판매일자'] = str(row.get('판매일자', row.get('판매일', ''))).split()[0]
+                        row_dict['사용개월'] = float(pd.to_numeric(row.get('사용개월', row.get('사용기간', 0)), errors='coerce') or 0)
+                        row_dict['주행거리'] = float(pd.to_numeric(row.get('주행거리', row.get('주행거리(Km)', 0)), errors='coerce') or 0)
+                        row_dict['납입율'] = float(pd.to_numeric(row.get('납입율', row.get('납입률', 100.0)), errors='coerce') or 100.0)
                         
-                        share_rate = float(row.get('분담율', row.get('분담률', row.get('업체분담율\n(%)', row.get('업체분담율(%)', 19.01)))))
+                        share_rate = float(row.get('분담율', row.get('분담률', row.get('업체분담율\n(%)', row.get('업체분담율(%)', row.get('제안분담율', 19.01))))) or 19.01)
                         if share_rate > 1:
-                            share_rate_val = share_rate / 100
+                            share_rate_val = share_rate
+                            share_ratio_decimal = share_rate / 100
                         else:
-                            share_rate_val = share_rate if share_rate > 0 else 0.1901
+                            share_rate_val = share_rate * 100
+                            share_ratio_decimal = share_rate if share_rate > 0 else 0.1901
                             
-                        row_dict['분담율'] = f"{share_rate_val * 100:.2f}"
-                        row_dict['적용율'] = f"{share_rate_val * 100:.2f}"
+                        row_dict['분담율'] = f"{share_rate_val:.2f}"
+                        row_dict['적용율'] = f"{share_rate_val:.2f}"
                         
                         raw_part = float(pd.to_numeric(row.get('부품비', row.get('변제 부품비', row.get('부품청구금액', 0))), errors='coerce') or 0)
                         raw_labor = float(pd.to_numeric(row.get('공임비', row.get('변제 공임비', row.get('공임비', 0))), errors='coerce') or 0)
@@ -1127,18 +1132,16 @@ elif menu == "고객사 클레임 비용 분석":
                         
                         if "산동" in sheet_name or "모비스" in sheet_name:
                             target_amt = float(pd.to_numeric(row.get('변제대상금액', raw_part + raw_labor), errors='coerce') or (raw_part + raw_labor))
-                            calc_part = raw_part * share_rate_val if raw_part > 0 else target_amt * share_rate_val * 0.5
-                            calc_labor = raw_labor * share_rate_val if raw_labor > 0 else target_amt * share_rate_val * 0.5
+                            calc_part = raw_part * share_ratio_decimal if raw_part > 0 else target_amt * share_ratio_decimal * 0.5
+                            calc_labor = raw_labor * share_ratio_decimal if raw_labor > 0 else target_amt * share_ratio_decimal * 0.5
                         else:
-                            calc_part = raw_part * share_rate_val
-                            calc_labor = raw_labor * share_rate_val
+                            calc_part = raw_part if raw_part > 1000 and "현대" in sheet_name else raw_part * share_ratio_decimal
+                            calc_labor = raw_labor if raw_labor > 1000 and "현대" in sheet_name else raw_labor * share_ratio_decimal
                             
-                        calc_out = raw_out
-                        
-                        row_dict['부품비'] = calc_part
-                        row_dict['공임비'] = calc_labor
-                        row_dict['외주비'] = calc_out
-                        row_dict['합계'] = calc_part + calc_labor + calc_out
+                        row_dict['부품비'] = raw_part if "현대" in sheet_name or "기아" in sheet_name else calc_part
+                        row_dict['공임비'] = raw_labor if "현대" in sheet_name or "기아" in sheet_name else calc_labor
+                        row_dict['외주비'] = raw_out
+                        row_dict['합계'] = row_dict['부품비'] + row_dict['공임비'] + row_dict['외주비']
                         
                         processed_rows.append(row_dict)
                         
@@ -1158,7 +1161,7 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     st.session_state['cost_df'] = master_cost_df
                     st.session_state['cost_uploaded_file_name'] = cost_uploaded_file.name
-                    st.success(f"첨부1의 모든 시트({', '.join(all_sheets)}) 데이터가 '예시안2' 표준 양식 및 계산법에 맞춰 완벽하게 취합되었습니다!")
+                    st.success(f"첨부1의 모든 시트({', '.join(all_sheets)}) 데이터가 '예시안2/3' 기준 표준 28개 항목으로 완벽하게 취합되었습니다!")
             except Exception as e:
                 st.error(f"비용 파일 처리 중 오류 발생: {e}")
 
