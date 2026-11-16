@@ -1053,6 +1053,7 @@ elif menu == "고객사 클레임 비용 분석":
         except Exception as e:
             st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
+    # [수정 완료] 들여쓰기 오류 수정으로 파일 업로드 시 즉시 28개 항목 표준 테이블로 파싱되도록 개선
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
             try:
