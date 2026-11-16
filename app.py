@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import calendar
 import os
+import json
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import io
@@ -41,8 +42,9 @@ st.markdown("""
 # 메인 타이틀
 st.title("Quality Assurance/Management")
 
-# 로컬 파일 자동 저장 및 불러오기 경로
+# 로컬 파일 자동 저장 및 불러오기 경로 (업무 데이터 & 설정 링크)
 TASKS_FILE = "tasks_data.csv"
+SETTINGS_FILE = "settings_data.json"
 
 def save_tasks_to_local(tasks):
     try:
@@ -66,7 +68,7 @@ def load_tasks_from_local():
                     except:
                         t_date = date.today()
                     try:
-                        t_deadline = datetime.strptime(str(row.get('deadline', date.today())).split()[0], '%Y-%m-%d').date()
+                        t_deadline = datetime.strptime(str(row.get('deadline', row.get('deadlin', date.today()))).split()[0], '%Y-%m-%d').date()
                     except:
                         t_deadline = date.today()
                         
@@ -86,6 +88,22 @@ def load_tasks_from_local():
         except Exception:
             pass
     return None
+
+def save_settings_to_local(settings_dict):
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings_dict, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"설정 저장 오류: {e}")
+
+def load_settings_from_local():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
 
 # 구글 시트에서 tasks 데이터를 불러오는 함수
 def load_tasks_from_gsheet():
@@ -111,7 +129,6 @@ def load_tasks_from_gsheet():
             except:
                 t_date = date.today()
             try:
-                # deadline 또는 deadlin 오탈자 모두 대응
                 dl_val = row.get('deadline', row.get('deadlin', date.today()))
                 t_deadline = datetime.strptime(str(dl_val).split()[0], '%Y-%m-%d').date()
             except:
@@ -133,21 +150,27 @@ def load_tasks_from_gsheet():
     except Exception as e:
         return None
 
-# 세션 스테이트 초기화
-if 'task_gsheet_url' not in st.session_state: st.session_state['task_gsheet_url'] = ""
+# 세션 스테이트 초기화 (로컬 저장된 설정 불러오기)
+saved_settings = load_settings_from_local()
+
+if 'gsheet_url' not in st.session_state:
+    st.session_state['gsheet_url'] = saved_settings.get('gsheet_url', "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml")
+if 'improve_gsheet_url' not in st.session_state:
+    st.session_state['improve_gsheet_url'] = saved_settings.get('improve_gsheet_url', "")
+if 'cost_gsheet_url' not in st.session_state:
+    st.session_state['cost_gsheet_url'] = saved_settings.get('cost_gsheet_url', "")
+if 'task_gsheet_url' not in st.session_state:
+    st.session_state['task_gsheet_url'] = saved_settings.get('task_gsheet_url', "")
 
 if 'tasks' not in st.session_state:
-    # 1순위: 로컬에 자동 저장된 파일이 있으면 최우선 로드 (새로고침 시 변경사항 유지)
     loaded_local = load_tasks_from_local()
     if loaded_local:
         st.session_state['tasks'] = loaded_local
     else:
-        # 2순위: 구글 시트 연동 데이터 로드 시도
         loaded_tasks = load_tasks_from_gsheet()
         if loaded_tasks:
             st.session_state['tasks'] = loaded_tasks
         else:
-            # 3순위: 기본 예시 데이터
             st.session_state['tasks'] = [
                 {
                     "id": 1,
@@ -190,10 +213,6 @@ if 'cost_df' not in st.session_state: st.session_state['cost_df'] = pd.DataFrame
 if 'uploaded_file_name' not in st.session_state: st.session_state['uploaded_file_name'] = None
 if 'improve_uploaded_file_name' not in st.session_state: st.session_state['improve_uploaded_file_name'] = None
 if 'cost_uploaded_file_name' not in st.session_state: st.session_state['cost_uploaded_file_name'] = None
-
-if 'gsheet_url' not in st.session_state: st.session_state['gsheet_url'] = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml"
-if 'improve_gsheet_url' not in st.session_state: st.session_state['improve_gsheet_url'] = ""
-if 'cost_gsheet_url' not in st.session_state: st.session_state['cost_gsheet_url'] = ""
 
 if 'improve_df' not in st.session_state:
     raw_data = [
@@ -273,12 +292,23 @@ elif menu == "업무 등록/관리":
                 task_export_df.to_excel(writer, index=False, sheet_name='tasks')
             t_excel_data = output_t.getvalue()
             st.download_button(
-                label="📥 현재 업무 목록 엑셀 다운로드 (구글 시트 업로드용)",
+                label="📥 현재 업무 목록 엑셀 다운로드 (구글 시트 백업용)",
                 data=t_excel_data,
                 file_name="tikitak_tasks_backup.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
+
+    # 구글 시트 즉시 반영용 TSV 간편 복사 영역 추가
+    with st.expander("📋 [추천] 구글 시트 1초 즉시 동기화 (파일 업로드 없이 복사·붙여넣기)"):
+        st.markdown("아래 박스의 **[텍스트 전체 복사]** 버튼을 누른 뒤, 구글 시트 **A1 셀**에 붙여넣기(`Ctrl + V`) 하시면 업로드 과정 없이 즉시 반영됩니다.")
+        if st.session_state['tasks']:
+            tsv_df = pd.DataFrame(st.session_state['tasks'])
+            for col in ['date', 'deadline']:
+                if col in tsv_df.columns:
+                    tsv_df[col] = tsv_df[col].astype(str)
+            tsv_text = tsv_df.to_csv(sep='\t', index=False)
+            st.text_area("구글 시트 붙여넣기용 데이터", tsv_text, height=120)
 
     st.markdown("---")
     
@@ -1001,7 +1031,27 @@ elif menu == "고객사 클레임 비용 분석":
         load_cost_gsheet_btn = st.button("비용 구글 시트 데이터 불러오기", use_container_width=True)
 
     if load_cost_gsheet_btn:
-        st.warning("구글 시트 연동 설정에서 URL을 확인해주세요.")
+        try:
+            cost_sheet_url = st.session_state['cost_gsheet_url']
+            if not cost_sheet_url:
+                st.warning("'구글 시트 연동 설정' 메뉴에서 고객사 클레임 비용 구글 시트 URL을 먼저 입력해주세요.")
+            else:
+                if "pubhtml" in cost_sheet_url:
+                    export_url = cost_sheet_url.replace("/pubhtml", "/pub?output=csv")
+                elif "edit" in cost_sheet_url:
+                    export_url = cost_sheet_url.split('/edit')[0] + '/export?format=csv'
+                else:
+                    export_url = cost_sheet_url
+
+                raw_cost_df = pd.read_csv(export_url)
+                if not raw_cost_df.empty:
+                    st.session_state['cost_df'] = raw_cost_df
+                    st.success("구글 시트에서 비용 데이터를 성공적으로 불러왔습니다!")
+                    st.rerun()
+                else:
+                    st.error("구글 시트 데이터가 비어있습니다.")
+        except Exception as e:
+            st.error(f"구글 시트 연동 중 오류 발생: {e}")
 
     if cost_uploaded_file is not None:
         if st.session_state['cost_uploaded_file_name'] != cost_uploaded_file.name:
@@ -1258,9 +1308,16 @@ elif menu == "구글 시트 연동 설정":
         st.session_state['cost_gsheet_url'] = cost_gsheet_input
         st.session_state['task_gsheet_url'] = task_gsheet_input
         
+        save_settings_to_local({
+            'gsheet_url': gsheet_input,
+            'improve_gsheet_url': improve_gsheet_input,
+            'cost_gsheet_url': cost_gsheet_input,
+            'task_gsheet_url': task_gsheet_input
+        })
+        
         reloaded = load_tasks_from_gsheet()
         if reloaded:
             st.session_state['tasks'] = reloaded
             save_tasks_to_local(st.session_state['tasks'])
             
-        st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장되었습니다!")
+        st.success("모든 구글 스프레드시트 연동 링크들이 성공적으로 저장되어 영구 반영되었습니다!")
