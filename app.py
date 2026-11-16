@@ -41,34 +41,84 @@ st.markdown("""
 # 메인 타이틀
 st.title("Quality Assurance/Management")
 
+# 구글 시트에서 tasks 데이터를 불러오는 함수
+def load_tasks_from_gsheet():
+    try:
+        sheet_url = st.session_state.get('task_gsheet_url', '')
+        if not sheet_url:
+            return None
+        if "pubhtml" in sheet_url:
+            export_url = sheet_url.replace("/pubhtml", "/pub?output=csv")
+        elif "edit" in sheet_url:
+            export_url = sheet_url.split('/edit')[0] + '/export?format=csv'
+        else:
+            export_url = sheet_url
+            
+        df = pd.read_csv(export_url)
+        if df.empty:
+            return None
+            
+        tasks = []
+        for _, row in df.iterrows():
+            try:
+                t_date = datetime.strptime(str(row.get('date', date.today())).split()[0], '%Y-%m-%d').date()
+            except:
+                t_date = date.today()
+            try:
+                t_deadline = datetime.strptime(str(row.get('deadline', date.today())).split()[0], '%Y-%m-%d').date()
+            except:
+                t_deadline = date.today()
+                
+            tasks.append({
+                "id": int(row.get('id', len(tasks) + 1)),
+                "title": str(row.get('title', '')),
+                "date": t_date,
+                "deadline": t_deadline,
+                "memo": str(row.get('memo', '')) if pd.notna(row.get('memo')) else "",
+                "requester": str(row.get('requester', '')) if pd.notna(row.get('requester')) else "",
+                "category": str(row.get('category', '고객제출')),
+                "completed": str(row.get('completed', 'False')).lower() == 'true',
+                "completed_date": str(row.get('completed_date')) if pd.notna(row.get('completed_date')) and str(row.get('completed_date')) != 'nan' else None,
+                "updated_date": str(row.get('updated_date')) if pd.notna(row.get('updated_date')) and str(row.get('updated_date')) != 'nan' else None
+            })
+        return tasks
+    except Exception as e:
+        return None
+
 # 세션 스테이트 초기화
+if 'task_gsheet_url' not in st.session_state: st.session_state['task_gsheet_url'] = ""
+
 if 'tasks' not in st.session_state:
-    st.session_state['tasks'] = [
-        {
-            "id": 1,
-            "title": "[현대위아] 10월 클레임 비용 정산",
-            "date": date.today(),
-            "deadline": date.today(),
-            "memo": "2차 검토 및 보고서 반영 필요",
-            "requester": "현대위아 품질팀",
-            "category": "고객제출",
-            "completed": False,
-            "completed_date": None,
-            "updated_date": None
-        },
-        {
-            "id": 2,
-            "title": "워터 펌프 어셈블리 소음 이슈 분석",
-            "date": date.today(),
-            "deadline": date.today(),
-            "memo": "원인 분석 결과 회신",
-            "requester": "고객지원팀",
-            "category": "자료작성",
-            "completed": True,
-            "completed_date": str(date.today()),
-            "updated_date": None
-        }
-    ]
+    loaded_tasks = load_tasks_from_gsheet()
+    if loaded_tasks:
+        st.session_state['tasks'] = loaded_tasks
+    else:
+        st.session_state['tasks'] = [
+            {
+                "id": 1,
+                "title": "[현대위아] 10월 클레임 비용 정산",
+                "date": date.today(),
+                "deadline": date.today(),
+                "memo": "2차 검토 및 보고서 반영 필요",
+                "requester": "현대위아 품질팀",
+                "category": "고객제출",
+                "completed": False,
+                "completed_date": None,
+                "updated_date": None
+            },
+            {
+                "id": 2,
+                "title": "워터 펌프 어셈블리 소음 이슈 분석",
+                "date": date.today(),
+                "deadline": date.today(),
+                "memo": "원인 분석 결과 회신",
+                "requester": "고객지원팀",
+                "category": "자료작성",
+                "completed": True,
+                "completed_date": str(date.today()),
+                "updated_date": None
+            }
+        ]
 
 if 'cal_year' not in st.session_state: st.session_state['cal_year'] = datetime.today().year
 if 'cal_month' not in st.session_state: st.session_state['cal_month'] = datetime.today().month
@@ -144,6 +194,37 @@ if menu == "종합 현황":
 # --- 1. 업무 등록/관리 메뉴 ---
 elif menu == "업무 등록/관리":
     st.subheader("월별 업무 관리 현황")
+    
+    # 구글 시트 연동 및 내보내기 버튼 추가
+    sync_col1, sync_col2 = st.columns(2)
+    with sync_col1:
+        if st.button("🔄 구글 시트에서 업무 새로고침/불러오기", use_container_width=True):
+            loaded = load_tasks_from_gsheet()
+            if loaded:
+                st.session_state['tasks'] = loaded
+                st.success("구글 시트에서 업무 데이터를 불러왔습니다!")
+                st.rerun()
+            else:
+                st.warning("설정된 구글 시트 URL이 없거나 데이터를 불러올 수 없습니다. '구글 시트 연동 설정'을 확인해주세요.")
+    with sync_col2:
+        if st.session_state['tasks']:
+            task_export_df = pd.DataFrame(st.session_state['tasks'])
+            for col in ['date', 'deadline']:
+                if col in task_export_df.columns:
+                    task_export_df[col] = task_export_df[col].astype(str)
+            output_t = io.BytesIO()
+            with pd.ExcelWriter(output_t, engine='openpyxl') as writer:
+                task_export_df.to_excel(writer, index=False, sheet_name='tasks')
+            t_excel_data = output_t.getvalue()
+            st.download_button(
+                label="📥 현재 업무 목록 엑셀 다운로드 (구글 시트 업로드용)",
+                data=t_excel_data,
+                file_name="tikitak_tasks_backup.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
+    st.markdown("---")
     
     col_m1, col_m2, col_m3 = st.columns([1, 3, 1])
     with col_m1:
@@ -847,7 +928,7 @@ elif menu == "개선 활동 관리":
                     else:
                         st.error("해당 품목은 필수 입력 항목입니다.")
 
-# --- 4. 고객사 클레임 비용 분석 메뉴 (첨부1 전체 시트 취합 및 모비스/WIA산동 환산 로직 반영) ---
+# --- 4. 고객사 클레임 비용 분석 메뉴 ---
 elif menu == "고객사 클레임 비용 분석":
     st.subheader("고객사별 클레임 비용 2차 가공 및 취합 분석")
     st.markdown("업로드하신 **'첨부1' 원본 엑셀 파일(모든 시트)**을 표준 28개 항목으로 완벽하게 취합 및 가공합니다. (모비스, WIA산동 분담률/환율 계산 공식 자동 적용)")
@@ -880,7 +961,6 @@ elif menu == "고객사 클레임 비용 분석":
                     if df_raw_sheet.empty or len(df_raw_sheet) < 3:
                         continue
                     
-                    # 헤더 행 찾기 (현대/기아 등 상단 메타데이터 3~5행 건너뛰기)
                     header_row_idx = 0
                     for idx, row in df_raw_sheet.iloc[:10].iterrows():
                         row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
@@ -978,7 +1058,6 @@ elif menu == "고객사 클레임 비용 분석":
         st.markdown("---")
         st.markdown("### 🔍 조회 및 검색 필터 (원하는 항목만 골라서 조회하세요)")
         
-        # 필터 기본값을 빈 상태([])로 설정하여 사용자가 직접 선택하게 함
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
             all_corps = sorted(cost_df['법인'].dropna().unique().tolist()) if '법인' in cost_df.columns else []
@@ -1049,7 +1128,6 @@ elif menu == "고객사 클레임 비용 분석":
 
         st.dataframe(formatted_summary, use_container_width=True, height=400)
 
-        # 엑셀 다운로드 버튼 추가
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             filtered_cost[available_display_cols].to_excel(writer, index=False, sheet_name='수정 취합')
@@ -1112,9 +1190,16 @@ elif menu == "구글 시트 연동 설정":
     gsheet_input = st.text_input("필드 클레임 현황 구글 시트 URL", st.session_state['gsheet_url'])
     improve_gsheet_input = st.text_input("개선 활동 관리 구글 시트 URL", st.session_state['improve_gsheet_url'])
     cost_gsheet_input = st.text_input("고객사 클레임 비용 구글 시트 URL", st.session_state['cost_gsheet_url'])
+    task_gsheet_input = st.text_input("업무 관리 구글 시트 URL", st.session_state['task_gsheet_url'])
     
     if st.button("연동 정보 저장"):
         st.session_state['gsheet_url'] = gsheet_input
         st.session_state['improve_gsheet_url'] = improve_gsheet_input
         st.session_state['cost_gsheet_url'] = cost_gsheet_input
+        st.session_state['task_gsheet_url'] = task_gsheet_input
+        
+        reloaded = load_tasks_from_gsheet()
+        if reloaded:
+            st.session_state['tasks'] = reloaded
+            
         st.success("구글 클라우드 스프레드시트 링크들이 성공적으로 저장되었습니다!")
