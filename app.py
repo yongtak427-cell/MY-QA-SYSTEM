@@ -1034,74 +1034,70 @@ elif menu == "고객사 클레임 비용 분석":
         file_wia = st.file_uploader("3. 위아(WIA) 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="ind_wia")
         file_mobis = st.file_uploader("4. 모비스 클레임 비용 엑셀 업로드", type=["xlsx", "xls"], key="ind_mobis")
 
-    # 공통 파싱 및 표준화 함수 (날짜 YY-MM-DD, 주행거리 00,000 포맷 적용)
-    def parse_cost_file(uploaded_file, corp_name):
+    # 공통 표준 컬럼 정의
+    target_columns = [
+        '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
+        '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
+        '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계'
+    ]
+
+    # 공통 날짜 파싱 (YY-MM-DD 형식)
+    def fmt_date(val):
+        if pd.isna(val) or str(val).strip() == '' or str(val).lower() == 'nan':
+            return ''
+        try:
+            dt = pd.to_datetime(val)
+            if pd.isna(dt):
+                return str(val).split()[0].replace('.', '-')
+            return dt.strftime('%y-%m-%d')
+        except:
+            s = str(val).split()[0].replace('.', '-')
+            if len(s) == 10 and s[4] == '-' and s[7] == '-':
+                return s[2:]
+            return s
+
+    # 1. HKMC 파싱 함수 (다중 시트 지원 및 헤더 자동 감지)
+    def parse_hkmc_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
         try:
             xls = pd.ExcelFile(uploaded_file)
             combined = []
-            target_columns = [
-                '법인', '발생구분', '통보서', 'H/K', '업체', 'SEQ', 'RO년월', 'R/O번호', 'VIN', 'C/TYPE', '차종', 
-                '원인부품', '원인품명', '주작업코드', '원인', '현상', '생산일자', '수리일자', '판매일자', '사용개월', 
-                '주행거리', '납입율', '분담율', '적용율', '부품비', '공임비', '외주비', '합계'
-            ]
-
             for sheet in xls.sheet_names:
                 df_raw = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
                 if df_raw.empty or len(df_raw) < 1:
                     continue
-                
                 header_idx = 0
                 for idx, row in df_raw.iloc[:10].iterrows():
                     row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                    if any(k in row_str for k in ["원인부품", "R/O번호", "통보서", "VIN", "차종", "원인품번", "클레임번호", "No.", "업체", "법인"]):
+                    if any(k in row_str for k in ["법인", "발생구분", "통보서", "R/O번호", "VIN"]):
                         header_idx = idx
                         break
-                
                 df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet, header=header_idx)
                 df_sheet = df_sheet.dropna(how='all')
                 if df_sheet.empty:
                     continue
-                
                 df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
                 
                 rows = []
                 for _, row in df_sheet.iterrows():
-                    # 날짜 포맷 변환 (YY-MM-DD)
-                    def fmt_date(val):
-                        if pd.isna(val) or str(val).strip() == '':
-                            return ''
-                        try:
-                            dt = pd.to_datetime(val)
-                            return dt.strftime('%y-%m-%d')
-                        except:
-                            s = str(val).split()[0].replace('.', '-')
-                            if len(s) == 10 and s[4] == '-' and s[7] == '-':
-                                return s[2:] # YYYY-MM-DD -> YY-MM-DD
-                            return s
-
                     prod_d = fmt_date(row.get('생산일자', row.get('생산일', '')))
                     rep_d = fmt_date(row.get('수리일자', row.get('수리일', '')))
                     sale_d = fmt_date(row.get('판매일자', row.get('판매일', '')))
-
-                    # 주행거리 포맷 (00,000)
+                    
                     raw_mile = pd.to_numeric(row.get('주행거리', row.get('주행거리(Km)', 0)), errors='coerce') or 0
                     mile_str = f"{int(raw_mile):,}"
-
-                    # 사용개월 (정수 또는 실수 깔끔하게)
-                    use_m = pd.to_numeric(row.get('사용개월', row.get('사용기간', 0)), errors='coerce') or 0
-
-                    # 금액 파싱 오류 방지 (WIA, 모비스 등 금액 컬럼 안전 연동)
-                    part_val = float(pd.to_numeric(row.get('부품비', row.get('변제 부품비', row.get('부품청구금액', 0))), errors='coerce') or 0)
-                    labor_val = float(pd.to_numeric(row.get('공임비', row.get('변제 공임비', row.get('공임비', 0))), errors='coerce') or 0)
-                    out_val = float(pd.to_numeric(row.get('외주비', row.get('변제 외주비', row.get('외주비', 0))), errors='coerce') or 0)
-                    tot_val = float(pd.to_numeric(row.get('합계', row.get('청구금액', part_val + labor_val + out_val)), errors='coerce') or (part_val + labor_val + out_val))
-
+                    use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
+                    
+                    part_val = float(pd.to_numeric(row.get('부품비', 0), errors='coerce') or 0)
+                    labor_val = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
+                    out_val = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
+                    tot_val = float(pd.to_numeric(row.get('합계', part_val + labor_val + out_val), errors='coerce') or (part_val + labor_val + out_val))
+                    
                     r_dict = {
-                        '법인': str(row.get('법인', corp_name)),
-                        '발생구분': str(row.get('발생구분', row.get('결함구분', 'D'))),
-                        '통보서': str(row.get('통보서', row.get('클레임번호', ''))),
+                        '법인': str(row.get('법인', sheet)),
+                        '발생구분': str(row.get('발생구분', 'D')),
+                        '통보서': str(row.get('통보서', '')),
                         'H/K': str(row.get('H/K', 'H')),
                         '업체': str(row.get('업체', 'RI14')),
                         'SEQ': str(row.get('SEQ', '1')),
@@ -1110,8 +1106,8 @@ elif menu == "고객사 클레임 비용 분석":
                         'VIN': str(row.get('VIN', '')),
                         'C/TYPE': str(row.get('C/TYPE', 'W')),
                         '차종': str(row.get('차종', '')),
-                        '원인부품': str(row.get('원인부품', row.get('원인품번', ''))),
-                        '원인품명': str(row.get('원인품명', row.get('원인부품명', row.get('품명', '')))),
+                        '원인부품': str(row.get('원인부품', '')),
+                        '원인품명': str(row.get('원인품명', '')),
                         '주작업코드': str(row.get('주작업코드', '')),
                         '원인': str(row.get('원인', '')),
                         '현상': str(row.get('현상', '')),
@@ -1129,26 +1125,317 @@ elif menu == "고객사 클레임 비용 분석":
                         '합계': tot_val
                     }
                     rows.append(r_dict)
-                
                 if rows:
                     df_sub = pd.DataFrame(rows)
                     for tc in target_columns:
                         if tc not in df_sub.columns:
                             df_sub[tc] = ''
                     combined.append(df_sub[target_columns])
-
             if combined:
-                res_df = pd.concat(combined, ignore_index=True)
-                return res_df
+                return pd.concat(combined, ignore_index=True)
         except Exception as e:
-            st.error(f"[{corp_name}] 파일 처리 중 오류 발생: {e}")
+            st.error(f"[HKMC] 파일 처리 중 오류 발생: {e}")
+        return pd.DataFrame()
+
+    # 2. WIA 파싱 함수 (요청사항 반영)
+    def parse_wia_file(uploaded_file):
+        if uploaded_file is None:
+            return pd.DataFrame()
+        try:
+            xls = pd.ExcelFile(uploaded_file)
+            combined = []
+            for sheet in xls.sheet_names:
+                df_raw = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
+                if df_raw.empty or len(df_raw) < 1:
+                    continue
+                header_idx = 0
+                for idx, row in df_raw.iloc[:10].iterrows():
+                    row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                    if any(k in row_str for k in ["고객통보서", "RO(클레임)번호", "VIN NO", "품번"]):
+                        header_idx = idx
+                        break
+                df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet, header=header_idx)
+                df_sheet = df_sheet.dropna(how='all')
+                if df_sheet.empty:
+                    continue
+                df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+                
+                rows = []
+                for _, row in df_sheet.iterrows():
+                    prod_d = fmt_date(row.get('생산일', row.get('생산일자', '')))
+                    rep_d = fmt_date(row.get('수리일', row.get('수리일자', '')))
+                    sale_d = fmt_date(row.get('판매일', row.get('판매일자', '')))
+                    
+                    raw_mile = pd.to_numeric(row.get('주행거리(Km)', row.get('주행거리', 0)), errors='coerce') or 0
+                    mile_str = f"{int(raw_mile):,}"
+                    use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
+                    
+                    part_val = float(pd.to_numeric(row.get('변제부품비', 0), errors='coerce') or 0)
+                    labor_val = float(pd.to_numeric(row.get('변제공임비', 0), errors='coerce') or 0)
+                    out_val = float(pd.to_numeric(row.get('변제외주비', 0), errors='coerce') or 0)
+                    tot_val = float(pd.to_numeric(row.get('변제합계', part_val + labor_val + out_val), errors='coerce') or (part_val + labor_val + out_val))
+                    
+                    r_dict = {
+                        '법인': str(sheet), # 엑셀시트 '이름' 반영
+                        '발생구분': str(row.get('발생구분', 'D')),
+                        '통보서': str(row.get('고객통보서', '')), # 고객통보서(B열)
+                        'H/K': 'W', # 항상 W 반영
+                        '업체': str(row.get('변제업체', 'RI14')),
+                        'SEQ': str(row.get('SEQ', '1')),
+                        'RO년월': str(row.get('RO년월', '')),
+                        'R/O번호': str(row.get('RO(클레임)번호', '')), # RO(클레임)번호(F열)
+                        'VIN': str(row.get('VIN NO', '')), # VIN NO(G열)
+                        'C/TYPE': str(row.get('C/TYPE', 'W:일반 클레임')),
+                        '차종': str(row.get('차종(표준)', '')), # 차종(표준)(I열)
+                        '원인부품': str(row.get('품번', '')), # 품번(K열)
+                        '원인품명': str(row.get('품명', '')),
+                        '주작업코드': str(row.get('주작업코드', '')),
+                        '원인': str(row.get('원인', '')),
+                        '현상': str(row.get('현상', '')),
+                        '생산일자': prod_d,
+                        '수리일자': rep_d,
+                        '판매일자': sale_d,
+                        '사용개월': f"{use_m:.1f}" if use_m % 1 != 0 else str(int(use_m)),
+                        '주행거리': mile_str,
+                        '납입율': float(pd.to_numeric(row.get('제안분담율', 100.0), errors='coerce') or 100.0),
+                        '분담율': float(pd.to_numeric(row.get('제안분담율', 19.01), errors='coerce') or 19.01),
+                        '적용율': float(pd.to_numeric(row.get('제안분담율', 19.01), errors='coerce') or 19.01),
+                        '부품비': part_val, # 변제부품비(V열)
+                        '공임비': labor_val, # 변제공임비(W열)
+                        '외주비': out_val, # 변제외주비(X열)
+                        '합계': tot_val # 변제합계(Y열)
+                    }
+                    rows.append(r_dict)
+                if rows:
+                    df_sub = pd.DataFrame(rows)
+                    for tc in target_columns:
+                        if tc not in df_sub.columns:
+                            df_sub[tc] = ''
+                    combined.append(df_sub[target_columns])
+            if combined:
+                return pd.concat(combined, ignore_index=True)
+        except Exception as e:
+            st.error(f"[WIA] 파일 처리 중 오류 발생: {e}")
+        return pd.DataFrame()
+
+    # 3. 글로비스 파싱 함수 (요청사항 반영: 발생구분 'E', SEQ=List No, R/O번호=RO No, 원인=원인코드, 현상=현상코드)
+    def parse_globis_file(uploaded_file):
+        if uploaded_file is None:
+            return pd.DataFrame()
+        try:
+            xls = pd.ExcelFile(uploaded_file)
+            combined = []
+            for sheet in xls.sheet_names:
+                df_raw = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
+                if df_raw.empty or len(df_raw) < 1:
+                    continue
+                header_idx = 0
+                for idx, row in df_raw.iloc[:10].iterrows():
+                    row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                    if any(k in row_str for k in ["통보서", "List No", "RO No", "원인품번"]):
+                        header_idx = idx
+                        break
+                df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet, header=header_idx)
+                df_sheet = df_sheet.dropna(how='all')
+                if df_sheet.empty:
+                    continue
+                df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+                
+                rows = []
+                for _, row in df_sheet.iterrows():
+                    prod_d = fmt_date(row.get('생산일', ''))
+                    rep_d = fmt_date(row.get('수리일', ''))
+                    sale_d = fmt_date(row.get('판매일', ''))
+                    
+                    raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
+                    mile_str = f"{int(raw_mile):,}"
+                    use_m = pd.to_numeric(row.get('사용기간', 0), errors='coerce') or 0
+                    
+                    part_val = float(pd.to_numeric(row.get('변제 부품비', row.get('부품비', 0)), errors='coerce') or 0)
+                    labor_val = float(pd.to_numeric(row.get('변제 공임비', row.get('공임비', 0)), errors='coerce') or 0)
+                    out_val = float(pd.to_numeric(row.get('변제 외주비', row.get('외주비', 0)), errors='coerce') or 0)
+                    tot_val = float(pd.to_numeric(row.get('변제 합계', row.get('합계', part_val + labor_val + out_val)), errors='coerce') or (part_val + labor_val + out_val))
+                    
+                    r_dict = {
+                        '법인': str(sheet),
+                        '발생구분': 'E', # 항상 E 반영
+                        '통보서': str(row.get('통보서', '')),
+                        'H/K': 'H',
+                        '업체': str(row.get('업체', 'RI14')),
+                        'SEQ': str(row.get('List No', '1')), # List No(C열)
+                        'RO년월': str(row.get('RO년월', '')),
+                        'R/O번호': str(row.get('RO No', '')), # RO No(F열)
+                        'VIN': str(row.get('VIN', '')),
+                        'C/TYPE': str(row.get('C/T', 'W')),
+                        '차종': str(row.get('차종', '')),
+                        '원인부품': str(row.get('원인품번', '')),
+                        '원인품명': str(row.get('원인품명', '')),
+                        '주작업코드': str(row.get('주작업코드', '')),
+                        '원인': str(row.get('원인코드', '')), # 원인코드(I열)
+                        '현상': str(row.get('현상코드', '')), # 현상코드(H열)
+                        '생산일자': prod_d,
+                        '수리일자': rep_d,
+                        '판매일자': sale_d,
+                        '사용개월': f"{use_m:.1f}" if use_m % 1 != 0 else str(int(use_m)),
+                        '주행거리': mile_str,
+                        '납입율': float(pd.to_numeric(row.get('분담율', 100.0), errors='coerce') * 100 if pd.notna(row.get('분담율')) and float(row.get('분담율', 0)) < 1 else 100.0),
+                        '분담율': float(pd.to_numeric(row.get('분담율', 19.39), errors='coerce') * 100 if pd.notna(row.get('분담율')) and float(row.get('분담율', 0)) < 1 else 19.39),
+                        '적용율': float(pd.to_numeric(row.get('분담율', 19.39), errors='coerce') * 100 if pd.notna(row.get('분담율')) and float(row.get('분담율', 0)) < 1 else 19.39),
+                        '부품비': part_val,
+                        '공임비': labor_val,
+                        '외주비': out_val,
+                        '합계': tot_val
+                    }
+                    rows.append(r_dict)
+                if rows:
+                    df_sub = pd.DataFrame(rows)
+                    for tc in target_columns:
+                        if tc not in df_sub.columns:
+                            df_sub[tc] = ''
+                    combined.append(df_sub[target_columns])
+            if combined:
+                return pd.concat(combined, ignore_index=True)
+        except Exception as e:
+            st.error(f"[글로비스] 파일 처리 중 오류 발생: {e}")
+        return pd.DataFrame()
+
+    # 4. 모비스 파싱 함수 (모비스(전) / 모비스(후) 시트별 맞춤 연동)
+    def parse_mobis_file(uploaded_file):
+        if uploaded_file is None:
+            return pd.DataFrame()
+        try:
+            xls = pd.ExcelFile(uploaded_file)
+            combined = []
+            for sheet in xls.sheet_names:
+                df_raw = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
+                if df_raw.empty or len(df_raw) < 1:
+                    continue
+                header_idx = 0
+                for idx, row in df_raw.iloc[:10].iterrows():
+                    row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+                    if any(k in row_str for k in ["클레임번호", "부품번호", "클레임유형"]):
+                        header_idx = idx
+                        break
+                df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet, header=header_idx)
+                df_sheet = df_sheet.dropna(how='all')
+                if df_sheet.empty:
+                    continue
+                df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+                
+                rows = []
+                for _, row in df_sheet.iterrows():
+                    prod_d = fmt_date(row.get('생산일자', row.get('생산', '')))
+                    rep_d = fmt_date(row.get('수리일자', row.get('수리', '')))
+                    sale_d = fmt_date(row.get('판매일자', row.get('판매', '')))
+                    
+                    raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
+                    mile_str = f"{int(raw_mile):,}"
+                    use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
+
+                    # 모비스(전) vs 모비스(후) 구분 처리
+                    if "전" in sheet:
+                        claim_no = str(row.get('클레임번호', ''))
+                        part_no = str(row.get('부품번호', ''))
+                        req_amt = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
+                        
+                        r_dict = {
+                            '법인': str(sheet),
+                            '발생구분': 'D',
+                            '통보서': claim_no,
+                            'H/K': 'M', # 항상 M 반영
+                            '업체': 'RI14',
+                            'SEQ': '1',
+                            'RO년월': '',
+                            'R/O번호': claim_no,
+                            'VIN': '',
+                            'C/TYPE': 'W',
+                            '차종': '',
+                            '원인부품': part_no, # 부품번호(D열)
+                            '원인품명': '',
+                            '주작업코드': '',
+                            '원인': '',
+                            '현상': '',
+                            '생산일자': prod_d,
+                            '수리일자': rep_d,
+                            '판매일자': sale_d,
+                            '사용개월': '0',
+                            '주행거리': '0',
+                            '납입율': 100.0,
+                            '분담율': 19.01,
+                            '적용율': 19.01,
+                            '부품비': 0.0,
+                            '공임비': 0.0,
+                            '외주비': req_amt, # 외주비 = 변제청구금액(E열)
+                            '합계': req_amt # 합계 = 변제청구금액(E열)
+                        }
+                    else: # 모비스(후) 및 일반 시트
+                        claim_no = str(row.get('클레임번호', ''))
+                        part_no = str(row.get('원인부품번호', row.get('부품번호', '')))
+                        part_name = str(row.get('원인부품명', ''))
+                        phen = str(row.get('현상코드', ''))
+                        cause = str(row.get('원인코드', ''))
+                        vin_val = str(row.get('VIN', ''))
+                        car_val = str(row.get('차종', ''))
+                        
+                        # 예시안3 기준 수식 계산 (부품청구금액, 공임비 등에 분담율 적용 등)
+                        share_rate = float(pd.to_numeric(row.get('업체분담률\n(%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
+                        part_raw = float(pd.to_numeric(row.get('부품청구금액', 0), errors='coerce') or 0)
+                        labor_raw = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
+                        out_raw = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
+                        
+                        # 분담율 적용 부품비 및 공임비 계산
+                        calc_part = round(part_raw * (share_rate / 100.0), 2) if part_raw > 0 else 0.0
+                        calc_labor = round(labor_raw * (share_rate / 100.0), 2) if labor_raw > 0 else 0.0
+                        tot_amt = float(pd.to_numeric(row.get('변제청구금액', calc_part + calc_labor + out_raw), errors='coerce') or (calc_part + calc_labor + out_raw))
+
+                        r_dict = {
+                            '법인': str(sheet),
+                            '발생구분': str(row.get('발생구분', 'E')),
+                            '통보서': claim_no,
+                            'H/K': str(row.get('H/K\n구분', row.get('H/K', 'M'))), # 항상 M 반영
+                            '업체': 'RI14',
+                            'SEQ': '1',
+                            'RO년월': '',
+                            'R/O번호': claim_no, # 클레임번호(D열)
+                            'VIN': vin_val,
+                            'C/TYPE': 'W',
+                            '차종': car_val,
+                            '원인부품': part_no, # 원인부품번호(E열)
+                            '원인품명': part_name,
+                            '주작업코드': '',
+                            '원인': cause, # 원인코드(R열)
+                            '현상': phen, # 현상코드(Q열)
+                            '생산일자': prod_d,
+                            '수리일자': rep_d,
+                            '판매일자': sale_d,
+                            '사용개월': f"{use_m:.1f}" if use_m % 1 != 0 else str(int(use_m)),
+                            '주행거리': mile_str,
+                            '납입율': 100.0,
+                            '분담율': share_rate,
+                            '적용율': share_rate,
+                            '부품비': calc_part,
+                            '공임비': calc_labor,
+                            '외주비': out_raw,
+                            '합계': tot_amt
+                        }
+                    rows.append(r_dict)
+                if rows:
+                    df_sub = pd.DataFrame(rows)
+                    for tc in target_columns:
+                        if tc not in df_sub.columns:
+                            df_sub[tc] = ''
+                    combined.append(df_sub[target_columns])
+            if combined:
+                return pd.concat(combined, ignore_index=True)
+        except Exception as e:
+            st.error(f"[모비스] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
     # 각 파일별 개별 파싱 및 세션 저장
-    df_hkmc = parse_cost_file(file_hkmc, "HKMC")
-    df_wia = parse_cost_file(file_wia, "WIA")
-    df_globis = parse_cost_file(file_globis, "글로비스")
-    df_mobis = parse_cost_file(file_mobis, "모비스")
+    df_hkmc = parse_hkmc_file(file_hkmc)
+    df_wia = parse_wia_file(file_wia)
+    df_globis = parse_globis_file(file_globis)
+    df_mobis = parse_mobis_file(file_mobis)
 
     st.markdown("---")
 
