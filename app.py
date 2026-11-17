@@ -1305,7 +1305,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[글로비스] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 4. 모비스 파싱 함수 (결측치 NaN 오류 원천 차단 보완)
+    # 4. 모비스 파싱 함수 (부품비, 공임비, 외주비에 분담률 반영된 수정 금액 적용)
     def parse_mobis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1368,7 +1368,7 @@ elif menu == "고객사 클레임 비용 분석":
                             '외주비': req_amt,
                             '합계': req_amt
                         }
-                    else: # 모비스(후)
+                    else: # 모비스(후) -> 부품비, 공임비, 외주비에 분담률 반영한 수정 금액 계산
                         claim_no = str(row.get('클레임번호', ''))
                         if not claim_no or claim_no == 'nan':
                             continue
@@ -1383,7 +1383,6 @@ elif menu == "고객사 클레임 비용 분석":
                         rep_d = fmt_date(row.get('수리일자', ''))
                         sale_d = fmt_date(row.get('판매일자', ''))
                         
-                        # 결측치(NaN) 안전 처리
                         raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce')
                         if pd.isna(raw_mile): raw_mile = 0
                         mile_str = f"{int(raw_mile):,}"
@@ -1391,12 +1390,20 @@ elif menu == "고객사 클레임 비용 분석":
                         use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce')
                         if pd.isna(use_m): use_m = 0
 
+                        # 업체분담률 (%) 가져오기 (기본 19.01%)
                         share_rate = float(pd.to_numeric(row.get('업체분담률 (%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
+                        
+                        # 원본 청구금액
                         part_raw = float(pd.to_numeric(row.get('부품청구금액', 0), errors='coerce') or 0)
                         labor_raw = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
                         out_raw = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
                         
-                        tot_amt = float(pd.to_numeric(row.get('변제청구금액', part_raw + labor_raw + out_raw), errors='coerce') or (part_raw + labor_raw + out_raw))
+                        # ★ 수정된 금액 적용 (원본 금액 * 분담률 / 100)
+                        part_val = round(part_raw * (share_rate / 100.0), 2)
+                        labor_val = round(labor_raw * (share_rate / 100.0), 2)
+                        out_val = round(out_raw * (share_rate / 100.0), 2)
+                        
+                        tot_amt = round(part_val + labor_val + out_val, 2)
 
                         hk_val = str(row.get('H/K 구분', row.get('H/K', 'M')))
                         if hk_val == 'nan' or not hk_val: hk_val = 'M'
@@ -1426,9 +1433,9 @@ elif menu == "고객사 클레임 비용 분석":
                             '납입율': 100.0,
                             '분담율': share_rate,
                             '적용율': share_rate,
-                            '부품비': part_raw,
-                            '공임비': labor_raw,
-                            '외주비': out_raw,
+                            '부품비': part_val,
+                            '공임비': labor_val,
+                            '외주비': out_val,
                             '합계': tot_amt
                         }
                     rows.append(r_dict)
