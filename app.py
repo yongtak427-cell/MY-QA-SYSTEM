@@ -1313,51 +1313,47 @@ elif menu == "고객사 클레임 비용 분석":
                 header_idx = 0
                 for idx, row in df_raw.iloc[:10].iterrows():
                     row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
-                    if any(k in row_str for k in ["클레임번호", "부품번호", "클레임유형"]):
+                    if any(k in row_str for k in ["클레임번호", "부품번호", "클레임유형", "원인부품번호"]):
                         header_idx = idx
                         break
                 df_sheet = pd.read_excel(uploaded_file, sheet_name=sheet, header=header_idx)
                 df_sheet = df_sheet.dropna(how='all')
                 if df_sheet.empty:
                     continue
-                df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+                
+                # 컬럼명 정리 (개행문자 및 공백 제거)
+                df_sheet.columns = [str(c).strip().replace('\n', ' ') for c in df_sheet.columns]
                 
                 rows = []
                 for _, row in df_sheet.iterrows():
-                    prod_d = fmt_date(row.get('생산일자', row.get('생산', '')))
-                    rep_d = fmt_date(row.get('수리일자', row.get('수리', '')))
-                    sale_d = fmt_date(row.get('판매일자', row.get('판매', '')))
-                    
-                    raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
-                    mile_str = f"{int(raw_mile):,}"
-                    use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
-
                     # 모비스(전) vs 모비스(후) 구분 처리
                     if "전" in sheet:
                         claim_no = str(row.get('클레임번호', ''))
-                        part_no = str(row.get('부품번호', ''))
+                        if not claim_no or claim_no == 'nan':
+                            continue
+                        part_no = str(row.get('품번', ''))
                         req_amt = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
                         
                         r_dict = {
                             '법인': str(sheet),
                             '발생구분': 'D',
                             '통보서': claim_no,
-                            'H/K': 'M', # 항상 M 반영
+                            'H/K': 'M',
                             '업체': 'RI14',
-                            'SEQ': '1',
+                            'SEQ': str(row.get('No.', '1')),
                             'RO년월': '',
                             'R/O번호': claim_no,
                             'VIN': '',
                             'C/TYPE': 'W',
                             '차종': '',
-                            '원인부품': part_no, # 부품번호(D열)
+                            '원인부품': part_no if part_no != 'nan' else '',
                             '원인품명': '',
                             '주작업코드': '',
                             '원인': '',
                             '현상': '',
-                            '생산일자': prod_d,
-                            '수리일자': rep_d,
-                            '판매일자': sale_d,
+                            '생산일자': '',
+                            '수리일자': '',
+                            '판매일자': '',
                             '사용개월': '0',
                             '주행거리': '0',
                             '납입율': 100.0,
@@ -1365,11 +1361,13 @@ elif menu == "고객사 클레임 비용 분석":
                             '적용율': 19.01,
                             '부품비': 0.0,
                             '공임비': 0.0,
-                            '외주비': req_amt, # 외주비 = 변제청구금액(E열)
-                            '합계': req_amt # 합계 = 변제청구금액(E열)
+                            '외주비': req_amt,
+                            '합계': req_amt
                         }
-                    else: # 모비스(후) 및 일반 시트
+                    else: # 모비스(후)
                         claim_no = str(row.get('클레임번호', ''))
+                        if not claim_no or claim_no == 'nan':
+                            continue
                         part_no = str(row.get('원인부품번호', row.get('부품번호', '')))
                         part_name = str(row.get('원인부품명', ''))
                         phen = str(row.get('현상코드', ''))
@@ -1377,34 +1375,41 @@ elif menu == "고객사 클레임 비용 분석":
                         vin_val = str(row.get('VIN', ''))
                         car_val = str(row.get('차종', ''))
                         
-                        # 예시안3 기준 수식 계산 (부품청구금액, 공임비 등에 분담율 적용 등)
-                        share_rate = float(pd.to_numeric(row.get('업체분담률\n(%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
+                        prod_d = fmt_date(row.get('생산일자', ''))
+                        rep_d = fmt_date(row.get('수리일자', ''))
+                        sale_d = fmt_date(row.get('판매일자', ''))
+                        
+                        raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
+                        mile_str = f"{int(raw_mile):,}"
+                        use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
+
+                        share_rate = float(pd.to_numeric(row.get('업체분담률 (%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
                         part_raw = float(pd.to_numeric(row.get('부품청구금액', 0), errors='coerce') or 0)
                         labor_raw = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
                         out_raw = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
                         
-                        # 분담율 적용 부품비 및 공임비 계산
-                        calc_part = round(part_raw * (share_rate / 100.0), 2) if part_raw > 0 else 0.0
-                        calc_labor = round(labor_raw * (share_rate / 100.0), 2) if labor_raw > 0 else 0.0
-                        tot_amt = float(pd.to_numeric(row.get('변제청구금액', calc_part + calc_labor + out_raw), errors='coerce') or (calc_part + calc_labor + out_raw))
+                        tot_amt = float(pd.to_numeric(row.get('변제청구금액', part_raw + labor_raw + out_raw), errors='coerce') or (part_raw + labor_raw + out_raw))
+
+                        hk_val = str(row.get('H/K 구분', row.get('H/K', 'M')))
+                        if hk_val == 'nan' or not hk_val: hk_val = 'M'
 
                         r_dict = {
                             '법인': str(sheet),
                             '발생구분': str(row.get('발생구분', 'E')),
                             '통보서': claim_no,
-                            'H/K': str(row.get('H/K\n구분', row.get('H/K', 'M'))), # 항상 M 반영
+                            'H/K': hk_val,
                             '업체': 'RI14',
-                            'SEQ': '1',
+                            'SEQ': str(row.get('No.', '1')),
                             'RO년월': '',
-                            'R/O번호': claim_no, # 클레임번호(D열)
-                            'VIN': vin_val,
+                            'R/O번호': claim_no,
+                            'VIN': vin_val if vin_val != 'nan' else '',
                             'C/TYPE': 'W',
-                            '차종': car_val,
-                            '원인부품': part_no, # 원인부품번호(E열)
-                            '원인품명': part_name,
+                            '차종': car_val if car_val != 'nan' else '',
+                            '원인부품': part_no if part_no != 'nan' else '',
+                            '원인품명': part_name if part_name != 'nan' else '',
                             '주작업코드': '',
-                            '원인': cause, # 원인코드(R열)
-                            '현상': phen, # 현상코드(Q열)
+                            '원인': cause if cause != 'nan' else '',
+                            '현상': phen if phen != 'nan' else '',
                             '생산일자': prod_d,
                             '수리일자': rep_d,
                             '판매일자': sale_d,
@@ -1413,8 +1418,8 @@ elif menu == "고객사 클레임 비용 분석":
                             '납입율': 100.0,
                             '분담율': share_rate,
                             '적용율': share_rate,
-                            '부품비': calc_part,
-                            '공임비': calc_labor,
+                            '부품비': part_raw,
+                            '공임비': labor_raw,
                             '외주비': out_raw,
                             '합계': tot_amt
                         }
