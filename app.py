@@ -1085,8 +1085,10 @@ elif menu == "고객사 클레임 비용 분석":
                     rep_d = fmt_date(row.get('수리일자', row.get('수리일', '')))
                     sale_d = fmt_date(row.get('판매일자', row.get('판매일', '')))
                     
-                    raw_mile = pd.to_numeric(row.get('주행거리', row.get('주행거리(Km)', 0)), errors='coerce') or 0
+                    raw_mile = pd.to_numeric(row.get('주행거리', row.get('주행거리(Km)', 0)), errors='coerce')
+                    if pd.isna(raw_mile): raw_mile = 0
                     mile_str = f"{int(raw_mile):,}"
+                    
                     use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
                     
                     part_val = float(pd.to_numeric(row.get('부품비', 0), errors='coerce') or 0)
@@ -1166,8 +1168,10 @@ elif menu == "고객사 클레임 비용 분석":
                     rep_d = fmt_date(row.get('수리일', row.get('수리일자', '')))
                     sale_d = fmt_date(row.get('판매일', row.get('판매일자', '')))
                     
-                    raw_mile = pd.to_numeric(row.get('주행거리(Km)', row.get('주행거리', 0)), errors='coerce') or 0
+                    raw_mile = pd.to_numeric(row.get('주행거리(Km)', row.get('주행거리', 0)), errors='coerce')
+                    if pd.isna(raw_mile): raw_mile = 0
                     mile_str = f"{int(raw_mile):,}"
+                    
                     use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
                     
                     part_val = float(pd.to_numeric(row.get('변제부품비', 0), errors='coerce') or 0)
@@ -1176,18 +1180,18 @@ elif menu == "고객사 클레임 비용 분석":
                     tot_val = float(pd.to_numeric(row.get('변제합계', part_val + labor_val + out_val), errors='coerce') or (part_val + labor_val + out_val))
                     
                     r_dict = {
-                        '법인': str(sheet), # 엑셀시트 '이름' 반영
+                        '법인': str(sheet),
                         '발생구분': str(row.get('발생구분', 'D')),
-                        '통보서': str(row.get('고객통보서', '')), # 고객통보서(B열)
-                        'H/K': 'W', # 항상 W 반영
+                        '통보서': str(row.get('고객통보서', '')),
+                        'H/K': 'W',
                         '업체': str(row.get('변제업체', 'RI14')),
                         'SEQ': str(row.get('SEQ', '1')),
                         'RO년월': str(row.get('RO년월', '')),
-                        'R/O번호': str(row.get('RO(클레임)번호', '')), # RO(클레임)번호(F열)
-                        'VIN': str(row.get('VIN NO', '')), # VIN NO(G열)
+                        'R/O번호': str(row.get('RO(클레임)번호', '')),
+                        'VIN': str(row.get('VIN NO', '')),
                         'C/TYPE': str(row.get('C/TYPE', 'W:일반 클레임')),
-                        '차종': str(row.get('차종(표준)', '')), # 차종(표준)(I열)
-                        '원인부품': str(row.get('품번', '')), # 품번(K열)
+                        '차종': str(row.get('차종(표준)', '')),
+                        '원인부품': str(row.get('품번', '')),
                         '원인품명': str(row.get('품명', '')),
                         '주작업코드': str(row.get('주작업코드', '')),
                         '원인': str(row.get('원인', '')),
@@ -1200,10 +1204,10 @@ elif menu == "고객사 클레임 비용 분석":
                         '납입율': float(pd.to_numeric(row.get('제안분담율', 100.0), errors='coerce') or 100.0),
                         '분담율': float(pd.to_numeric(row.get('제안분담율', 19.01), errors='coerce') or 19.01),
                         '적용율': float(pd.to_numeric(row.get('제안분담율', 19.01), errors='coerce') or 19.01),
-                        '부품비': part_val, # 변제부품비(V열)
-                        '공임비': labor_val, # 변제공임비(W열)
-                        '외주비': out_val, # 변제외주비(X열)
-                        '합계': tot_val # 변제합계(Y열)
+                        '부품비': part_val,
+                        '공임비': labor_val,
+                        '외주비': out_val,
+                        '합계': tot_val
                     }
                     rows.append(r_dict)
                 if rows:
@@ -1218,7 +1222,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[WIA] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 3. 글로비스 파싱 함수 (요청사항 반영: 발생구분 'E', SEQ=List No, R/O번호=RO No, 원인=원인코드, 현상=현상코드)
+    # 3. 글로비스 파싱 함수 (요청사항 반영)
     def parse_globis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1247,8 +1251,10 @@ elif menu == "고객사 클레임 비용 분석":
                     rep_d = fmt_date(row.get('수리일', ''))
                     sale_d = fmt_date(row.get('판매일', ''))
                     
-                    raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
+                    raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce')
+                    if pd.isna(raw_mile): raw_mile = 0
                     mile_str = f"{int(raw_mile):,}"
+                    
                     use_m = pd.to_numeric(row.get('사용기간', 0), errors='coerce') or 0
                     
                     part_val = float(pd.to_numeric(row.get('변제 부품비', row.get('부품비', 0)), errors='coerce') or 0)
@@ -1258,21 +1264,21 @@ elif menu == "고객사 클레임 비용 분석":
                     
                     r_dict = {
                         '법인': str(sheet),
-                        '발생구분': 'E', # 항상 E 반영
+                        '발생구분': 'E',
                         '통보서': str(row.get('통보서', '')),
                         'H/K': 'H',
                         '업체': str(row.get('업체', 'RI14')),
-                        'SEQ': str(row.get('List No', '1')), # List No(C열)
+                        'SEQ': str(row.get('List No', '1')),
                         'RO년월': str(row.get('RO년월', '')),
-                        'R/O번호': str(row.get('RO No', '')), # RO No(F열)
+                        'R/O번호': str(row.get('RO No', '')),
                         'VIN': str(row.get('VIN', '')),
                         'C/TYPE': str(row.get('C/T', 'W')),
                         '차종': str(row.get('차종', '')),
                         '원인부품': str(row.get('원인품번', '')),
                         '원인품명': str(row.get('원인품명', '')),
                         '주작업코드': str(row.get('주작업코드', '')),
-                        '원인': str(row.get('원인코드', '')), # 원인코드(I열)
-                        '현상': str(row.get('현상코드', '')), # 현상코드(H열)
+                        '원인': str(row.get('원인코드', '')),
+                        '현상': str(row.get('현상코드', '')),
                         '생산일자': prod_d,
                         '수리일자': rep_d,
                         '판매일자': sale_d,
@@ -1299,7 +1305,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[글로비스] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 4. 모비스 파싱 함수 (모비스(전) / 모비스(후) 시트별 맞춤 연동)
+    # 4. 모비스 파싱 함수 (결측치 NaN 오류 원천 차단 보완)
     def parse_mobis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1321,12 +1327,10 @@ elif menu == "고객사 클레임 비용 분석":
                 if df_sheet.empty:
                     continue
                 
-                # 컬럼명 정리 (개행문자 및 공백 제거)
                 df_sheet.columns = [str(c).strip().replace('\n', ' ') for c in df_sheet.columns]
                 
                 rows = []
                 for _, row in df_sheet.iterrows():
-                    # 모비스(전) vs 모비스(후) 구분 처리
                     if "전" in sheet:
                         claim_no = str(row.get('클레임번호', ''))
                         if not claim_no or claim_no == 'nan':
@@ -1379,9 +1383,13 @@ elif menu == "고객사 클레임 비용 분석":
                         rep_d = fmt_date(row.get('수리일자', ''))
                         sale_d = fmt_date(row.get('판매일자', ''))
                         
-                        raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce') or 0
+                        # 결측치(NaN) 안전 처리
+                        raw_mile = pd.to_numeric(row.get('주행거리', 0), errors='coerce')
+                        if pd.isna(raw_mile): raw_mile = 0
                         mile_str = f"{int(raw_mile):,}"
-                        use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce') or 0
+                        
+                        use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce')
+                        if pd.isna(use_m): use_m = 0
 
                         share_rate = float(pd.to_numeric(row.get('업체분담률 (%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
                         part_raw = float(pd.to_numeric(row.get('부품청구금액', 0), errors='coerce') or 0)
@@ -1454,7 +1462,6 @@ elif menu == "고객사 클레임 비용 분석":
 
         st.markdown(f"#### 📋 {title_prefix} 개별 클레임 취합 결과 (총 {len(df_target):,}건)")
         
-        # 금액 포맷팅 뷰
         display_df = df_target.copy()
         for col in ['부품비', '공임비', '외주비', '합계']:
             if col in display_df.columns:
@@ -1462,7 +1469,6 @@ elif menu == "고객사 클레임 비용 분석":
 
         st.dataframe(display_df, use_container_width=True, height=400)
 
-        # 다운로드 버튼
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_target.to_excel(writer, index=False, sheet_name=f'{title_prefix}_취합')
