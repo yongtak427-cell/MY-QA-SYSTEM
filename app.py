@@ -1139,7 +1139,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[HKMC] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 2. WIA 파싱 함수 (요청사항 반영)
+    # 2. WIA 파싱 함수
     def parse_wia_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1222,7 +1222,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[WIA] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 3. 글로비스 파싱 함수 (요청사항 반영)
+    # 3. 글로비스 파싱 함수
     def parse_globis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1305,13 +1305,15 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[글로비스] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 4. 모비스 파싱 함수 (부품비, 공임비, 외주비에 분담률 반영된 수정 금액 적용)
+    # 4. 모비스 파싱 함수 (클레임 유형 조건 분기 적용)
     def parse_mobis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
         try:
             xls = pd.ExcelFile(uploaded_file)
             combined = []
+            target_types = ["내수장착전", "내수장착후", "수출장착전", "수출장착후"]
+
             for sheet in xls.sheet_names:
                 df_raw = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
                 if df_raw.empty or len(df_raw) < 1:
@@ -1331,12 +1333,20 @@ elif menu == "고객사 클레임 비용 분석":
                 
                 rows = []
                 for _, row in df_sheet.iterrows():
+                    claim_type = str(row.get('클레임유형', '')).strip()
+                    
                     if "전" in sheet:
                         claim_no = str(row.get('클레임번호', ''))
                         if not claim_no or claim_no == 'nan':
                             continue
                         part_no = str(row.get('품번', ''))
                         req_amt = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
+                        
+                        # 클레임유형이 지정된 4가지 중 하나일 때만 분담률 적용 (전 시트는 기본 변제청구금액이 외주비로 들어감)
+                        if claim_type in target_types:
+                            out_val = round(req_amt * (19.01 / 100.0), 2)
+                        else:
+                            out_val = req_amt
                         
                         r_dict = {
                             '법인': str(sheet),
@@ -1365,10 +1375,10 @@ elif menu == "고객사 클레임 비용 분석":
                             '적용율': 19.01,
                             '부품비': 0.0,
                             '공임비': 0.0,
-                            '외주비': req_amt,
-                            '합계': req_amt
+                            '외주비': out_val,
+                            '합계': out_val
                         }
-                    else: # 모비스(후) -> 부품비, 공임비, 외주비에 분담률 반영한 수정 금액 계산
+                    else: # 모비스(후)
                         claim_no = str(row.get('클레임번호', ''))
                         if not claim_no or claim_no == 'nan':
                             continue
@@ -1390,18 +1400,21 @@ elif menu == "고객사 클레임 비용 분석":
                         use_m = pd.to_numeric(row.get('사용개월', 0), errors='coerce')
                         if pd.isna(use_m): use_m = 0
 
-                        # 업체분담률 (%) 가져오기 (기본 19.01%)
                         share_rate = float(pd.to_numeric(row.get('업체분담률 (%)', row.get('업체분담률(%)', 19.01)), errors='coerce') or 19.01)
                         
-                        # 원본 청구금액
                         part_raw = float(pd.to_numeric(row.get('부품청구금액', 0), errors='coerce') or 0)
                         labor_raw = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
                         out_raw = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
                         
-                        # ★ 수정된 금액 적용 (원본 금액 * 분담률 / 100)
-                        part_val = round(part_raw * (share_rate / 100.0), 2)
-                        labor_val = round(labor_raw * (share_rate / 100.0), 2)
-                        out_val = round(out_raw * (share_rate / 100.0), 2)
+                        # ★ 조건 분기: '내수장착전', '내수장착후', '수출장착전', '수출장착후'인 경우에만 분담률 반영 수정본 금액 산출
+                        if claim_type in target_types:
+                            part_val = round(part_raw * (share_rate / 100.0), 2)
+                            labor_val = round(labor_raw * (share_rate / 100.0), 2)
+                            out_val = round(out_raw * (share_rate / 100.0), 2)
+                        else:  # 운송비, 고품 운송비 등 그 외의 내용은 원본 금액 그대로 적용
+                            part_val = part_raw
+                            labor_val = labor_raw
+                            out_val = out_raw
                         
                         tot_amt = round(part_val + labor_val + out_val, 2)
 
