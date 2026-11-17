@@ -1056,7 +1056,7 @@ elif menu == "고객사 클레임 비용 분석":
                 return s[2:]
             return s
 
-    # 1. HKMC 파싱 함수 (다중 시트 지원 및 헤더 자동 감지)
+    # 1. HKMC 파싱 함수
     def parse_hkmc_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1305,7 +1305,7 @@ elif menu == "고객사 클레임 비용 분석":
             st.error(f"[글로비스] 파일 처리 중 오류 발생: {e}")
         return pd.DataFrame()
 
-    # 4. 모비스 파싱 함수 (클레임 유형 조건 분기 적용)
+    # 4. 모비스 파싱 함수 (요청사항 반영)
     def parse_mobis_file(uploaded_file):
         if uploaded_file is None:
             return pd.DataFrame()
@@ -1335,18 +1335,12 @@ elif menu == "고객사 클레임 비용 분석":
                 for _, row in df_sheet.iterrows():
                     claim_type = str(row.get('클레임유형', '')).strip()
                     
-                    if "전" in sheet:
+                    if "전" in sheet: # 모비스(전): 클레임 금액 별도 수정 없이 있는 그대로 반영
                         claim_no = str(row.get('클레임번호', ''))
                         if not claim_no or claim_no == 'nan':
                             continue
-                        part_no = str(row.get('품번', ''))
+                        part_no = str(row.get('품번', row.get('부품번호', '')))
                         req_amt = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
-                        
-                        # 클레임유형이 지정된 4가지 중 하나일 때만 분담률 적용 (전 시트는 기본 변제청구금액이 외주비로 들어감)
-                        if claim_type in target_types:
-                            out_val = round(req_amt * (19.01 / 100.0), 2)
-                        else:
-                            out_val = req_amt
                         
                         r_dict = {
                             '법인': str(sheet),
@@ -1375,13 +1369,17 @@ elif menu == "고객사 클레임 비용 분석":
                             '적용율': 19.01,
                             '부품비': 0.0,
                             '공임비': 0.0,
-                            '외주비': out_val,
-                            '합계': out_val
+                            '외주비': req_amt,
+                            '합계': req_amt
                         }
                     else: # 모비스(후)
                         claim_no = str(row.get('클레임번호', ''))
-                        if not claim_no or claim_no == 'nan':
+                        
+                        # 번호나 클레임번호가 없고, 변제청구금액 등에 고품 운송비 등의 금액만 있는 행 처리 대응
+                        val_check = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
+                        if (not claim_no or claim_no == 'nan' or claim_no == '-') and claim_type == '' and val_check == 0:
                             continue
+
                         part_no = str(row.get('원인부품번호', row.get('부품번호', '')))
                         part_name = str(row.get('원인부품명', ''))
                         phen = str(row.get('현상코드', ''))
@@ -1406,12 +1404,18 @@ elif menu == "고객사 클레임 비용 분석":
                         labor_raw = float(pd.to_numeric(row.get('공임비', 0), errors='coerce') or 0)
                         out_raw = float(pd.to_numeric(row.get('외주비', 0), errors='coerce') or 0)
                         
-                        # ★ 조건 분기: '내수장착전', '내수장착후', '수출장착전', '수출장착후'인 경우에만 분담률 반영 수정본 금액 산출
+                        # 고품 운송비 등 변제청구금액 열에만 금액이 있는 경우 처리
+                        req_amt_col = float(pd.to_numeric(row.get('변제청구금액', 0), errors='coerce') or 0)
+                        if part_raw == 0 and labor_raw == 0 and out_raw == 0 and req_amt_col > 0:
+                            out_raw = req_amt_col
+
+                        # ★ 조건: '내수장착전', '내수장착후', '수출장착전', '수출장착후'인 경우에만 분담률 반영 수정본 금액 산출
+                        # 운송비, 고품 운송비 등 그 외 항목은 분담률 적용하지 않고 원본 금액 그대로 기입
                         if claim_type in target_types:
                             part_val = round(part_raw * (share_rate / 100.0), 2)
                             labor_val = round(labor_raw * (share_rate / 100.0), 2)
                             out_val = round(out_raw * (share_rate / 100.0), 2)
-                        else:  # 운송비, 고품 운송비 등 그 외의 내용은 원본 금액 그대로 적용
+                        else:
                             part_val = part_raw
                             labor_val = labor_raw
                             out_val = out_raw
@@ -1423,29 +1427,29 @@ elif menu == "고객사 클레임 비용 분석":
 
                         r_dict = {
                             '법인': str(sheet),
-                            '발생구분': str(row.get('발생구분', 'E')),
-                            '통보서': claim_no,
+                            '발생구분': str(row.get('발생구분', 'E')) if str(row.get('발생구분', 'E')) != 'nan' else '-',
+                            '통보서': claim_no if claim_no != 'nan' else '-',
                             'H/K': hk_val,
                             '업체': 'RI14',
-                            'SEQ': str(row.get('No.', '1')),
+                            'SEQ': str(row.get('No.', '1')) if pd.notna(row.get('No.')) else '1',
                             'RO년월': '',
-                            'R/O번호': claim_no,
-                            'VIN': vin_val if vin_val != 'nan' else '',
+                            'R/O번호': claim_no if claim_no != 'nan' else '-',
+                            'VIN': vin_val if vin_val != 'nan' else '-',
                             'C/TYPE': 'W',
-                            '차종': car_val if car_val != 'nan' else '',
-                            '원인부품': part_no if part_no != 'nan' else '',
-                            '원인품명': part_name if part_name != 'nan' else '',
+                            '차종': car_val if car_val != 'nan' else '-',
+                            '원인부품': part_no if part_no != 'nan' else '-',
+                            '원인품명': part_name if part_name != 'nan' else '-',
                             '주작업코드': '',
-                            '원인': cause if cause != 'nan' else '',
-                            '현상': phen if phen != 'nan' else '',
+                            '원인': cause if cause != 'nan' else '-',
+                            '현상': phen if phen != 'nan' else '-',
                             '생산일자': prod_d,
                             '수리일자': rep_d,
                             '판매일자': sale_d,
                             '사용개월': f"{use_m:.1f}" if use_m % 1 != 0 else str(int(use_m)),
                             '주행거리': mile_str,
                             '납입율': 100.0,
-                            '분담율': share_rate,
-                            '적용율': share_rate,
+                            '분담율': share_rate if claim_type in target_types else 0.0,
+                            '적용율': share_rate if claim_type in target_types else 0.0,
                             '부품비': part_val,
                             '공임비': labor_val,
                             '외주비': out_val,
