@@ -7,6 +7,7 @@ import json
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import io
+import streamlit.components.v1 as components
 
 # 페이지 설정 (레이아웃 넓게 설정)
 st.set_page_config(page_title="TIKITAK Task Management", page_icon="📊", layout="wide")
@@ -43,8 +44,9 @@ st.markdown("""
 st.title("Quality Assurance/Management")
 
 # 로컬 파일 자동 저장 및 불러오기 경로 (업무 데이터 & 설정 링크)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
 TASKS_FILE = "tasks_data.csv"
-SETTINGS_FILE = "settings_data.json"
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings_data.json")
 COST_DATA_DIR = "saved_cost_files"
 
 if not os.path.exists(COST_DATA_DIR):
@@ -109,6 +111,81 @@ def load_settings_from_local():
             pass
     return {}
 
+SETTING_KEYS = ['gsheet_url', 'improve_gsheet_url', 'cost_gsheet_url', 'task_gsheet_url']
+
+def load_settings_from_secrets():
+    try:
+        return {
+            k: str(st.secrets[k])
+            for k in SETTING_KEYS
+            if k in st.secrets and str(st.secrets[k]).strip()
+        }
+    except Exception:
+        return {}
+
+def load_settings_from_query_params():
+    result = {}
+    try:
+        for k in SETTING_KEYS:
+            if k in st.query_params:
+                val = str(st.query_params[k])
+                result[k] = "" if val == "__EMPTY__" else val
+    except Exception:
+        pass
+    return result
+
+def sync_settings_to_query_params(settings_dict):
+    try:
+        for k in SETTING_KEYS:
+            val = settings_dict.get(k, "")
+            st.query_params[k] = "__EMPTY__" if val == "" else val
+    except Exception:
+        pass
+
+def save_settings_to_browser(settings_dict):
+    payload = json.dumps(settings_dict, ensure_ascii=False)
+    components.html(
+        f"""
+        <script>
+        try {{
+            window.parent.localStorage.setItem('tikitak_gsheet_settings', JSON.stringify({payload}));
+        }} catch (e) {{}}
+        </script>
+        """,
+        height=0,
+    )
+
+def restore_settings_from_browser():
+    keys_json = json.dumps(SETTING_KEYS)
+    components.html(
+        f"""
+        <script>
+        try {{
+            const raw = window.parent.localStorage.getItem('tikitak_gsheet_settings');
+            if (raw) {{
+                const data = JSON.parse(raw);
+                const keys = {keys_json};
+                const url = new URL(window.parent.location.href);
+                let changed = false;
+                keys.forEach(k => {{
+                    if (Object.prototype.hasOwnProperty.call(data, k)) {{
+                        const targetVal = data[k] === "" ? "__EMPTY__" : data[k];
+                        if (url.searchParams.get(k) !== targetVal) {{
+                            url.searchParams.set(k, targetVal);
+                            changed = true;
+                        }}
+                    }}
+                }});
+                if (changed) {{
+                    window.parent.location.replace(url.toString());
+                }}
+            }}
+        }} catch (e) {{}}
+        </script>
+        """,
+        height=0,
+    )
+
 # 구글 시트에서 tasks 데이터를 불러오는 함수
 def load_tasks_from_gsheet():
     try:
@@ -154,8 +231,22 @@ def load_tasks_from_gsheet():
     except Exception as e:
         return None
 
-# 세션 스테이트 초기화 (로컬 저장된 설정 불러오기)
-saved_settings = load_settings_from_local()
+# 세션 스테이트 초기화 (로컬 저장된 설정, URL 파라미터, 시크릿, 브라우저 저장소 불러오기)
+local_settings = load_settings_from_local()
+secret_settings = load_settings_from_secrets()
+qp_settings = load_settings_from_query_params()
+
+saved_settings = {}
+saved_settings.update(secret_settings)
+saved_settings.update(local_settings)
+saved_settings.update(qp_settings)
+
+if qp_settings and not local_settings:
+    save_settings_to_local(saved_settings)
+
+if not local_settings and not qp_settings and not st.session_state.get('_browser_settings_checked', False):
+    st.session_state['_browser_settings_checked'] = True
+    restore_settings_from_browser()
 
 if 'gsheet_url' not in st.session_state:
     st.session_state['gsheet_url'] = saved_settings.get('gsheet_url', "https://docs.google.com/spreadsheets/d/e/2PACX-1vQoePTO6LK-r65996JMmTMfdC-D8zuj83sa_YBQ4VxyFsq8ZRTaXBbiI5ZmPVngpkrPK-soa9P8IetD/pubhtml")
@@ -1531,15 +1622,18 @@ elif menu == "구글 시트 연동 설정":
     task_gsheet_input = st.text_input("업무 관리 구글 시트 URL", st.session_state['task_gsheet_url'])
     
     if st.button("연동 정보 저장"):
-        st.session_state['gsheet_url'] = gsheet_input
-        st.session_state['improve_gsheet_url'] = improve_gsheet_input
-        st.session_state['cost_gsheet_url'] = cost_gsheet_input
-        st.session_state['task_gsheet_url'] = task_gsheet_input
+        new_settings = {
+            'gsheet_url': gsheet_input.strip(),
+            'improve_gsheet_url': improve_gsheet_input.strip(),
+            'cost_gsheet_url': cost_gsheet_input.strip(),
+            'task_gsheet_url': task_gsheet_input.strip()
+        }
+        st.session_state['gsheet_url'] = new_settings['gsheet_url']
+        st.session_state['improve_gsheet_url'] = new_settings['improve_gsheet_url']
+        st.session_state['cost_gsheet_url'] = new_settings['cost_gsheet_url']
+        st.session_state['task_gsheet_url'] = new_settings['task_gsheet_url']
         
-        save_settings_to_local({
-            'gsheet_url': gsheet_input,
-            'improve_gsheet_url': improve_gsheet_input,
-            'cost_gsheet_url': cost_gsheet_input,
-            'task_gsheet_url': task_gsheet_input
-        })
+        save_settings_to_local(new_settings)
+        sync_settings_to_query_params(new_settings)
+        save_settings_to_browser(new_settings)
         st.success("구글 시트 연동 정보가 저장되었습니다.")
